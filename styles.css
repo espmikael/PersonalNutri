@@ -231,3 +231,11 @@ textarea.input { padding: 10px 12px; min-height: 64px; resize: vertical; }
 .daynav-btn:first-child { margin-left: -8px; }
 .daynav-btn:disabled { color: var(--line); cursor: default; }
 .daynav-today { border: none; background: var(--soft); color: var(--pri-text); border-radius: 99px; font-size: 12px; font-weight: 600; min-height: 28px; padding: 0 10px; margin-left: 4px; }
+
+details.more summary, details.how summary { cursor: pointer; font-weight: 600; font-size: 14px; min-height: 44px; display: flex; align-items: center; gap: 6px; color: var(--pri-text); list-style: none; }
+details.more summary::-webkit-details-marker, details.how summary::-webkit-details-marker { display: none; }
+details.more summary::before, details.how summary::before { content: '+'; width: 18px; font-weight: 700; }
+details[open].more summary::before, details[open].how summary::before { content: '−'; }
+details.how { border-top: 1px solid var(--row); }
+details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
+.tag { font-size: 11px; font-weight: 600; color: var(--pri-text); background: var(--soft); border-radius: 99px; padding: 2px 7px; white-space: nowrap; }

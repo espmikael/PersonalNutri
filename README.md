@@ -60,6 +60,12 @@ Colunas (acentos e maiúsculas não importam):
 - Se as colunas Refeição, Horário ou Opção ficarem vazias, o app repete o valor da linha de cima.
 - Números aceitam vírgula ou ponto.
 
+## Peso e medidas
+
+Em **Progresso**, o check-in semanal pede o peso (em jejum) e a cintura. Em **Outras medidas** entram peito, braço contraído, coxa e quadril, para medir a cada 2 a 4 semanas. O card **Como medir** explica onde passar a fita em cada uma. Registrar de novo na mesma data completa o registro daquele dia sem apagar o que já estava lá.
+
+O card **Medidas** compara a primeira e a última medida de cada parte. Para perder gordura e ganhar massa, o sinal bom é a cintura cair enquanto peito, braço e coxa se mantêm ou sobem, mesmo que o peso ande devagar.
+
 ## Dias anteriores
 
 Na tela **Hoje**, as setas ‹ › ao lado da data voltam até 14 dias. Assim dá para revisar e marcar um dia que passou (refeições, anotações e água). Refeição que ficar sem marcação conta como pulada no histórico.
@@ -91,7 +97,7 @@ Em **Progresso › Exportar histórico** sai `personalnutri-historico-AAAA-MM-DD
 - **Leia-me**: como cada número foi calculado.
 - **Resumo diário**: uma linha por dia (inclusive dias sem registro), com refeições feitas, kcal do plano, kcal anotadas, kcal de bebida, total, diferença da meta, macros, refeição livre, peso, cintura e anotações.
 - **Refeições**: cada refeição de cada dia, com a opção escolhida, se foi feita, se seguiu o plano e as anotações.
-- **Anotações**, **Bebidas alcoólicas**, **Check-ins**, **Metas** e **Plano atual**.
+- **Anotações**, **Bebidas alcoólicas**, **Check-ins e medidas**, **Metas** e **Plano atual**.
 
 A água entra no resumo diário (ml do dia e meta). A meta de água fica em **Macros › Metas** (padrão: 2.700 ml, como no plano da nutricionista).
 

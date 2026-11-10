@@ -284,7 +284,17 @@ function weekGrid() {
   }).join('');
   return { html: `<div class="week">${cells}</div>`, done, possible };
 }
-function lastCheckin() { return S.checkins.length ? S.checkins[S.checkins.length - 1] : null; }
+/* Medidas com fita: cintura toda semana; as outras a cada 2 a 4 semanas */
+const MEDIDAS = [
+  { id: 'cintura', label: 'Cintura', how: 'Na altura do umbigo, com a barriga relaxada, no fim de uma expiração normal. Não encolha a barriga.' },
+  { id: 'peito', label: 'Peito', how: 'Na linha dos mamilos, com os braços soltos ao lado do corpo, no fim da expiração. Confira no espelho se a fita está reta nas costas.' },
+  { id: 'braco', label: 'Braço', how: 'Braço direito contraído: cotovelo dobrado a 90°, punho fechado, bíceps apertado. Meça na parte mais alta do bíceps.' },
+  { id: 'coxa', label: 'Coxa', how: 'Coxa direita, em pé com o peso nas duas pernas e o músculo relaxado. Meça no ponto mais grosso, logo abaixo do glúteo.' },
+  { id: 'quadril', label: 'Quadril', how: 'No ponto mais largo do bumbum, com os pés juntos e a fita paralela ao chão.' }
+];
+const weighIns = () => S.checkins.filter((c) => num(c.peso));
+function lastCheckin() { const w = weighIns(); return w.length ? w[w.length - 1] : null; }
+function lastMeasure(id) { for (let i = S.checkins.length - 1; i >= 0; i--) if (num(S.checkins[i][id])) return S.checkins[i]; return null; }
 
 /* ---------- Hoje ---------- */
 function mealCard(m, k) {
@@ -362,7 +372,7 @@ function viewHoje() {
     <section class="card stack" aria-label="Macros"><div class="between"><h2 class="label">${isToday ? 'Consumido hoje' : 'Consumido em ' + ddmm(k)}</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar plano</a></div>${macroBars(c, g)}</section>
     ${waterCard(k)}
     <section class="card stack" aria-label="Progresso"><h2 class="label">Progresso</h2>
-      <div class="grid2"><div><div class="small muted" style="font-weight:600">Peso</div><div class="num big">${lc ? nf(lc.peso, 1) + ' kg' : '—'}</div></div><div><div class="small muted" style="font-weight:600">Cintura</div><div class="num big">${lc && lc.cintura ? nf(lc.cintura, 1) + ' cm' : '—'}</div></div></div>
+      <div class="grid2"><div><div class="small muted" style="font-weight:600">Peso</div><div class="num big">${lc ? nf(lc.peso, 1) + ' kg' : '—'}</div></div><div><div class="small muted" style="font-weight:600">Cintura</div><div class="num big">${lastMeasure('cintura') ? nf(lastMeasure('cintura').cintura, 1) + ' cm' : '—'}</div></div></div>
       ${weekGrid().html}<a class="small" style="font-weight:600;text-decoration:none" href="#progresso">Fazer check-in</a></section>
     <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
   </div>`;
@@ -443,7 +453,7 @@ function viewExtras() {
 
 /* ---------- Progresso ---------- */
 function chart() {
-  const e = S.checkins;
+  const e = weighIns();
   if (!e.length) return '<div class="small muted">Faça o primeiro check-in para ver o gráfico.</div>';
   const g = S.goals;
   const start = e[0].date;
@@ -473,19 +483,37 @@ function viewProgresso() {
   const g = S.goals;
   const k = todayKey();
   const e = S.checkins;
+  const w = weighIns();
   const lc = lastCheckin();
-  const diff = e.length > 1 ? Math.round((lc.peso - e[0].peso) * 10) / 10 : null;
+  const diff = w.length > 1 ? Math.round((lc.peso - w[0].peso) * 10) / 10 : null;
   const wg = weekGrid();
+  const mIn = (m) => `<label class="field">${m.label} (cm)<input class="input strong" id="ck-${m.id}" type="number" inputmode="decimal" step="0.5" placeholder="${lastMeasure(m.id) ? nf(lastMeasure(m.id)[m.id], 1) : '—'}"></label>`;
+  const evol = MEDIDAS.map((m) => {
+    const vals = e.filter((x) => num(x[m.id]));
+    if (!vals.length) return null;
+    const f = vals[0], l = vals[vals.length - 1];
+    const d = Math.round((l[m.id] - f[m.id]) * 10) / 10;
+    return `<tr><td>${m.label}</td><td>${nf(f[m.id], 1)}</td><td><strong>${nf(l[m.id], 1)}</strong></td><td>${vals.length > 1 ? (d > 0 ? '+' : '') + nf(d, 1) : '—'}</td></tr>`;
+  }).filter(Boolean);
   return header('Progresso', 'Check-in uma vez por semana, em jejum') + `<div class="split"><div class="col">
     <section class="card stack" aria-label="Check-in semanal"><div class="meal-name">Check-in semanal</div>
-      <div class="grid2"><label class="field">Peso (kg)<input class="input strong" id="ck-peso" type="number" inputmode="decimal" step="0.1" placeholder="${lc ? nf(lc.peso, 1) : '81,0'}"></label><label class="field">Cintura no umbigo (cm)<input class="input strong" id="ck-cintura" type="number" inputmode="decimal" step="0.5" placeholder="ex.: 88"></label></div>
+      <div class="grid2"><label class="field">Peso (kg)<input class="input strong" id="ck-peso" type="number" inputmode="decimal" step="0.1" placeholder="${lc ? nf(lc.peso, 1) : '81,0'}"></label>${mIn(MEDIDAS[0])}</div>
+      <details class="more"><summary>Outras medidas <span class="muted">· a cada 2 a 4 semanas</span></summary>
+        <div class="grid2" style="margin-top:12px">${MEDIDAS.slice(1).map(mIn).join('')}</div>
+      </details>
       <label class="field">Data<input class="input" id="ck-data" type="date" value="${k}"></label>
       <button type="button" class="btn block" data-act="checkin">Registrar check-in</button></section>
     <section class="card stack chart" aria-label="Gráfico do peso"><div class="between"><h2 class="label">Peso</h2><span class="muted small">${lc ? `<span class="num" style="font-size:22px;color:var(--ink)">${nf(lc.peso, 1)}</span> kg${diff !== null ? ' · ' + (diff > 0 ? '+' : '') + nf(diff, 1) + ' kg' : ''}` : ''}</span></div>${chart()}
       <div class="small muted">Tracejado cinza: ritmo de 0,5 kg por semana${num(g.meta) ? '. Pontilhado verde: peso meta' : ''}.</div></section>
   </div><div class="col">
+    ${evol.length ? `<section class="card" aria-label="Medidas"><h2 class="label" style="margin-bottom:6px">Medidas (cm)</h2>
+      <table class="table"><thead><tr><th>Medida</th><th>Primeira</th><th>Última</th><th>Variação</th></tr></thead><tbody>${evol.join('')}</tbody></table>
+      <div class="small muted" style="margin-top:8px">Cintura caindo com peito, braço e coxa mantidos ou subindo é perda de gordura com ganho de massa.</div></section>` : ''}
+    <section class="card stack" aria-label="Como medir"><h2 class="label">Como medir</h2>
+      <div class="small muted">De manhã, em jejum e antes de treinar. Fita rente à pele, sem apertar, paralela ao chão. Sempre o mesmo lado. Meça duas vezes e anote a média.</div>
+      ${MEDIDAS.map((m) => `<details class="how"><summary>${m.label}</summary><div class="small">${m.how}</div></details>`).join('')}</section>
     <section class="card" aria-label="Histórico"><h2 class="label" style="margin-bottom:6px">Histórico</h2>
-      ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${e.slice().reverse().map((x) => `<tr><td>${ddmm(x.date)}</td><td><strong>${nf(x.peso, 1)} kg</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
+      ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${e.slice().reverse().map((x) => `<tr><td>${ddmm(x.date)}${MEDIDAS.slice(1).some((m) => num(x[m.id])) ? ' <span class="tag">+ medidas</span>' : ''}</td><td><strong>${num(x.peso) ? nf(x.peso, 1) + ' kg' : '—'}</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
     <section class="card stack" aria-label="Esta semana"><div class="between label"><span>Esta semana</span><span>${wg.done} de ${wg.possible} refeições</span></div>${wg.html}</section>
     <section class="card stack" aria-label="Exportar histórico"><div class="meal-name">Histórico completo</div>
       <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, a água, as bebidas alcoólicas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
@@ -841,7 +869,7 @@ async function exportHistory() {
         'Proteína do plano (g)': Math.round(p), 'Carbo do plano (g)': Math.round(c), 'Gordura do plano (g)': Math.round(gg),
         'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
         'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
-        'Peso (kg)': ck ? ck.peso : '', 'Cintura (cm)': ck && ck.cintura ? ck.cintura : '', 'Anotações': textos.join(' | ')
+        'Peso (kg)': ck && num(ck.peso) ? ck.peso : '', 'Cintura (cm)': ck && ck.cintura ? ck.cintura : '', 'Anotações': textos.join(' | ')
       });
     });
     const leia = [
@@ -852,7 +880,7 @@ async function exportHistory() {
       { 'Leia-me': 'Refeição sem marcação (Feita = não) deve ser tratada como pulada: o usuário revisa o dia e marca o que comeu.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
-      { 'Leia-me': 'Peso medido em jejum; cintura na altura do umbigo.' }
+      { 'Leia-me': 'Peso medido em jejum. Medidas com fita, sempre do lado direito: cintura no umbigo (semanal); peito na linha dos mamilos, braço contraído no pico do bíceps, coxa logo abaixo do glúteo e quadril no ponto mais largo (a cada 2 a 4 semanas).' }
     ];
     const metas = [
       { 'Meta': 'Calorias/dia', 'Valor': g.kcal }, { 'Meta': 'Proteína (g)', 'Valor': g.prot }, { 'Meta': 'Carboidrato (g)', 'Valor': g.carb },
@@ -867,7 +895,7 @@ async function exportHistory() {
     add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
     add(anotacoes, 'Anotações', [11, 18, 16, 50, 10]);
     add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas alcoólicas');
-    add(S.checkins.map((x) => ({ 'Data': x.date, 'Peso (kg)': x.peso, 'Cintura (cm)': x.cintura || '' })), 'Check-ins');
+    add(S.checkins.map((x) => ({ 'Data': x.date, 'Peso (kg)': num(x.peso) || '', 'Cintura (cm)': num(x.cintura) || '', 'Peito (cm)': num(x.peito) || '', 'Braço contraído (cm)': num(x.braco) || '', 'Coxa (cm)': num(x.coxa) || '', 'Quadril (cm)': num(x.quadril) || '' })), 'Check-ins e medidas');
     add(metas, 'Metas', [20, 12]);
     add(plano, 'Plano atual', [16, 8, 28, 32, 18, 6, 12, 10, 12]);
     XLSX.writeFile(wb, 'personalnutri-historico-' + todayKey() + '.xlsx');
@@ -946,11 +974,15 @@ const ACT = {
   },
   deldrink: (el) => { S.drinks = S.drinks.filter((d) => d.id !== el.dataset.id); save(); },
   checkin: () => {
-    const peso = num(document.getElementById('ck-peso').value);
-    const cintura = num(document.getElementById('ck-cintura').value) || null;
     const date = document.getElementById('ck-data').value || todayKey();
-    if (!peso) { toast('Informe o peso'); return; }
-    S.checkins = S.checkins.filter((c) => c.date !== date).concat([{ date, peso, cintura }]).sort((a, b) => a.date.localeCompare(b.date));
+    const vals = { peso: num(document.getElementById('ck-peso').value) };
+    MEDIDAS.forEach((m) => { vals[m.id] = num((document.getElementById('ck-' + m.id) || {}).value); });
+    if (!Object.values(vals).some(Boolean)) { toast('Informe o peso ou alguma medida'); return; }
+    /* Mesmo dia: completa o registro existente em vez de apagar o que já tinha */
+    const old = S.checkins.find((c) => c.date === date) || { date };
+    const rec = { ...old };
+    Object.keys(vals).forEach((key) => { if (vals[key]) rec[key] = vals[key]; });
+    S.checkins = S.checkins.filter((c) => c.date !== date).concat([rec]).sort((a, b) => a.date.localeCompare(b.date));
     save(); toast('Check-in registrado');
   },
   delcheckin: (el) => { if (!confirm('Apagar este check-in?')) return; S.checkins = S.checkins.filter((c) => c.date !== el.dataset.date); save(); },
