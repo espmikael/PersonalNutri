@@ -38,7 +38,7 @@ function defaultPlan() {
     ] }
   ];
 }
-const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '', data: '2027-01-19' };
+const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '' };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
   vinho: { label: 'Vinho', k: 0.85, ml: 150, step: 25 },
@@ -54,7 +54,7 @@ function normalizeState(x) {
   if (!x || typeof x !== 'object') return d;
   return {
     ...d, ...x,
-    goals: { ...d.goals, ...(x.goals || {}) },
+    goals: (({ data, ...rest }) => rest)({ ...d.goals, ...(x.goals || {}) }),
     plan: Array.isArray(x.plan) && x.plan.length ? x.plan : d.plan,
     days: x.days || {}, free: x.free || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
@@ -312,7 +312,6 @@ function viewHoje() {
   const lc = lastCheckin();
   const wd = weekDrinks();
   const free = !!S.free[weekStart()];
-  const daysLeft = g.data ? daysBetween(k, g.data) : null;
   const summary = `<a class="card stack" href="#macros" style="text-decoration:none;color:var(--ink)">
     <div class="grid2">
       <div><div class="small muted" style="font-weight:500">Calorias</div><div class="num big">${nf(c.k)} <span class="small muted" style="font-weight:500">/ ${nf(g.kcal)}</span></div></div>
@@ -330,7 +329,7 @@ function viewHoje() {
     <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
   </div>`;
   const meals = sortedPlan().map((m) => mealCard(m, k)).join('') + (S.plan.length ? foraCard(k) : '');
-  return header('Hoje', esc(longDate(k)) + (daysLeft !== null && daysLeft > 0 ? ` · ${daysLeft} dias até ${ddmm(g.data)}` : '')) +
+  return header('Hoje', esc(longDate(k))) +
     `<div class="split"><div class="col"><div class="only-mobile">${summary}</div><div class="only-mobile">${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
 
@@ -357,7 +356,6 @@ function viewMacros() {
   const g = S.goals;
   const rows = sortedPlan().map((m) => { const o = m.opts[optIndex(m, k)]; const x = sum(o ? o.items : []); return { name: m.name + (m.opts.length > 1 && o ? ` · ${o.name}` : ''), ...x }; });
   const tot = rows.reduce((a, r) => ({ k: a.k + r.k, p: a.p + r.p, c: a.c + r.c, g: a.g + r.g }), { k: 0, p: 0, c: 0, g: 0 });
-  const days = g.data ? daysBetween(k, g.data) : null;
   const lc = lastCheckin();
   const pesoAtual = lc ? lc.peso : num(g.peso);
   const falta = num(g.meta) && pesoAtual ? Math.round((pesoAtual - num(g.meta)) * 10) / 10 : null;
@@ -370,8 +368,8 @@ function viewMacros() {
       <tfoot><tr><td>Total</td><td>${nf(tot.k)}</td><td>${nf(tot.p)}</td><td>${nf(tot.c)}</td><td>${nf(tot.g)}</td></tr></tfoot></table>
       <div class="small muted" style="margin-top:8px">Com as opções escolhidas para hoje.</div></section>
   </div><div class="col">
-    <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2><span class="small" style="font-weight:600;color:var(--pri-text)">${days !== null && days > 0 ? days + ' dias até a data alvo' : ''}</span></div>
-      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}${field('Data alvo', 'data', 'date')}</div>
+    <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2></div>
+      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}</div>
       <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso meta.` : 'Peso meta alcançado.') : 'Defina o peso meta para ver quanto falta.'}</div></section>
   </div></div>`;
 }
@@ -410,9 +408,9 @@ function chart() {
   if (!e.length) return '<div class="small muted">Faça o primeiro check-in para ver o gráfico.</div>';
   const g = S.goals;
   const start = e[0].date;
-  let end = g.data && g.data > start ? g.data : addDays(start, 70);
   const lastDate = e[e.length - 1].date;
-  if (lastDate > end) end = lastDate;
+  let end = addDays(lastDate, 28);
+  if (end < addDays(start, 56)) end = addDays(start, 56);
   const span = Math.max(7, daysBetween(start, end));
   const planEnd = e[0].peso - 0.5 * span / 7;
   const vals = e.map((x) => x.peso).concat([planEnd]);
@@ -438,10 +436,9 @@ function viewProgresso() {
   const e = S.checkins;
   const lc = lastCheckin();
   const diff = e.length > 1 ? Math.round((lc.peso - e[0].peso) * 10) / 10 : null;
-  const days = g.data ? daysBetween(k, g.data) : null;
   const wg = weekGrid();
-  return header('Progresso', days !== null && days > 0 ? `${days} dias até ${ddmm(g.data)}` : '') + `<div class="split"><div class="col">
-    <section class="card stack" aria-label="Check-in semanal"><div class="between"><div class="meal-name">Check-in semanal</div><span class="small muted" style="font-weight:600">Peso em jejum</span></div>
+  return header('Progresso', 'Check-in uma vez por semana, em jejum') + `<div class="split"><div class="col">
+    <section class="card stack" aria-label="Check-in semanal"><div class="meal-name">Check-in semanal</div>
       <div class="grid2"><label class="field">Peso (kg)<input class="input strong" id="ck-peso" type="number" inputmode="decimal" step="0.1" placeholder="${lc ? nf(lc.peso, 1) : '81,0'}"></label><label class="field">Cintura no umbigo (cm)<input class="input strong" id="ck-cintura" type="number" inputmode="decimal" step="0.5" placeholder="ex.: 88"></label></div>
       <label class="field">Data<input class="input" id="ck-data" type="date" value="${k}"></label>
       <button type="button" class="btn block" data-act="checkin">Registrar check-in</button></section>
@@ -820,7 +817,7 @@ async function exportHistory() {
     ];
     const metas = [
       { 'Meta': 'Calorias/dia', 'Valor': g.kcal }, { 'Meta': 'Proteína (g)', 'Valor': g.prot }, { 'Meta': 'Carboidrato (g)', 'Valor': g.carb },
-      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Água (ml/dia)', 'Valor': g.agua }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }, { 'Meta': 'Data alvo', 'Valor': g.data }
+      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Água (ml/dia)', 'Valor': g.agua }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }
     ];
     const plano = [];
     S.plan.forEach((m) => m.opts.forEach((o) => o.items.forEach((i) => plano.push({ 'Refeição': m.name, 'Horário': m.time, 'Opção': o.name, 'Alimento': i.food, 'Quantidade': i.qty, 'kcal': num(i.k), 'Proteína (g)': num(i.p), 'Carbo (g)': num(i.c), 'Gordura (g)': num(i.g) }))));
