@@ -26,12 +26,8 @@ function defaultPlan() {
       { name: 'Crepioca', tip: '', items: [it('Tapioca', '3 col. sopa · 45 g', 155, 0, 38, 0), it('Ovos', '2 unidades', 145, 13, 1, 10), it('Requeijão light', '1 col. sopa · 20 g', 40, 2, 1, 2)] }
     ] },
     { id: 'almoco', name: 'Almoço', time: '12:00', opts: opcoesAlmoco() },
-    { id: 'pre', name: 'Pré-treino', time: '15:30', opts: [
-      { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] },
-      { name: 'Pão com doce de leite ou geleia', tip: 'Carboidrato rápido para treinar logo depois, mas com pouca proteína. Nesse dia, tome 1 dose de whey depois do treino.', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Doce de leite ou geleia de uva', '1 col. sopa · 20 g', 65, 2, 11, 1)] }
-    ] },
-    { id: 'lanche', name: 'Lanche', time: '17:00', opts: [
-      { name: 'Iogurte com aveia', tip: '', items: [it('Iogurte natural', '170 g', 105, 7, 9, 6), it('Aveia', '2 col. sopa', 75, 3, 11, 1)] }
+    { id: 'pre', name: 'Pré-treino', time: '16:00', opts: [
+      { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] }
     ] },
     { id: 'jantar', name: 'Jantar', time: '21:00', opts: opcoesAlmoco() }
   ];
