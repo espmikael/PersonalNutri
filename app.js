@@ -800,7 +800,7 @@ async function exportHistory() {
       { 'Leia-me': 'Resumo diário: uma linha por dia, inclusive dias sem nenhum registro (refeições feitas = 0).' },
       { 'Leia-me': 'kcal do plano: soma das refeições marcadas como feitas, pela opção do plano escolhida no dia. Os macros (proteína, carbo, gordura) só existem para essas refeições.' },
       { 'Leia-me': 'kcal anotadas: estimativas digitadas à mão para trocas, comida a mais, refeição livre e beliscos. Anotação sem kcal fica registrada, mas não soma.' },
-      { 'Leia-me': 'Refeição sem marcação não significa jejum: pode ser só esquecimento de marcar.' },
+      { 'Leia-me': 'Refeição sem marcação (Feita = não) deve ser tratada como pulada: o usuário revisa o dia e marca o que comeu.' },
       { 'Leia-me': 'kcal de bebida: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum; cintura na altura do umbigo.' }
     ];
