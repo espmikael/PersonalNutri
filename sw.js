@@ -2,7 +2,7 @@
 // Arquivos do próprio app: tenta a rede primeiro (para pegar atualizações) e usa a cópia salva se estiver offline.
 // Fontes e bibliotecas de CDN: usa a cópia salva e atualiza em segundo plano.
 // Chamadas ao Supabase nunca passam pelo cache.
-const VERSION = 'pn-v1';
+const VERSION = 'pn-v2';
 const APP_CACHE = VERSION + '-app';
 const CDN_CACHE = VERSION + '-cdn';
 const APP_FILES = ['./', './index.html', './styles.css', './app.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];

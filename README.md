@@ -34,7 +34,8 @@ O app usa o mesmo projeto do TreinoHoje (o plano gratuito permite só 2 projetos
 
 - Todo o estado do app (plano, metas, dias, extras e check-ins) fica numa linha por usuário, em JSON.
 - Cada alteração é salva no aparelho na hora e enviada ao Supabase cerca de 1 segundo depois.
-- Ao entrar ou voltar para o app, ele busca a versão da nuvem e fica com a mais recente. Se o mesmo dado for editado em dois aparelhos ao mesmo tempo, vale a última gravação.
+- Ao entrar ou voltar para o app, ele busca a versão da nuvem. Se só a nuvem mudou, ele usa a versão da nuvem. Se os dois aparelhos mudaram (por exemplo, o celular ficou offline), ele junta dia a dia: em cada dia fica a versão editada por último, e bebidas e check-ins dos dois lados são somados.
+- Limitação: algo apagado num aparelho enquanto o outro estava offline pode reaparecer depois da junção.
 - Sem login ("Usar sem conta neste aparelho"), os dados ficam só no navegador daquele aparelho.
 
 ## Importar e exportar o plano

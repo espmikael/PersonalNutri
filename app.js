@@ -55,7 +55,7 @@ function normalizeState(x) {
   return {
     ...d, ...x,
     goals: (({ data, ...rest }) => rest)({ ...d.goals, ...(x.goals || {}) }),
-    plan: Array.isArray(x.plan) && x.plan.length ? x.plan : d.plan,
+    plan: Array.isArray(x.plan) ? x.plan : d.plan,
     days: x.days || {}, free: x.free || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
@@ -133,6 +133,7 @@ function dayRec(k) {
   if (!S.days[k]) S.days[k] = {};
   const d = S.days[k];
   d.sel = d.sel || {}; d.done = d.done || {}; d.snap = d.snap || {}; d.notes = d.notes || {}; d.byNote = d.byNote || {};
+  d.u = Date.now();
   return d;
 }
 function dropReplacements(k, mid) {
@@ -166,13 +167,27 @@ function planned(m, k = todayKey()) {
   const sn = S.days[k] && S.days[k].snap && S.days[k].snap[m.id];
   if (sn && isDone(m, k)) return { name: sn.name, k: sn.k, p: sn.p, c: sn.c, g: sn.g };
   const o = m.opts[optIndex(m, k)];
-  return o ? { name: o.name, ...sum(o.items) } : { name: '', ...ZERO() };
+  return o ? { name: o.name, ...sum(o.items) } : { name: sn ? sn.name : '', ...ZERO() };
 }
 function snapshot(m, k) {
   const o = m.opts[optIndex(m, k)];
   if (!o) return null;
   const x = sum(o.items);
-  return { name: o.name, k: x.k, p: x.p, c: x.c, g: x.g };
+  return { name: o.name, k: x.k, p: x.p, c: x.c, g: x.g, meal: m.name, time: m.time };
+}
+/* Refeições de um dia: as do plano e as que já saíram do plano mas têm registro nesse dia */
+function mealsOfDay(k) {
+  const list = sortedPlan();
+  const d = S.days[k];
+  if (!d) return list;
+  const ids = new Set(list.map((m) => m.id));
+  const extra = new Set([...Object.keys(d.snap || {}), ...Object.keys(d.notes || {}), ...Object.keys(d.done || {}).filter((x) => d.done[x])]);
+  extra.forEach((id) => {
+    if (ids.has(id) || id === FORA) return;
+    const sn = (d.snap || {})[id] || {};
+    list.push({ id, name: sn.meal || 'Refeição removida do plano', time: sn.time || '', opts: [], orphan: true });
+  });
+  return list;
 }
 /* O que entrou de uma refeição: o plano (se feita) ou a troca anotada, mais o que foi comido a mais */
 function mealIntake(m, k) {
@@ -183,7 +198,7 @@ function mealIntake(m, k) {
   return { k: base.k + extra.reduce((a, n) => a + num(n.kcal), 0), p: base.p, c: base.c, g: base.g, replaced: repl.length > 0 };
 }
 function consumed(k = todayKey()) {
-  const tot = S.plan.reduce((a, m) => { const x = mealIntake(m, k); return { k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, g: a.g + x.g }; }, ZERO());
+  const tot = mealsOfDay(k).reduce((a, m) => { const x = mealIntake(m, k); return { k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, g: a.g + x.g }; }, ZERO());
   tot.k += notesOf(k, FORA).reduce((a, n) => a + num(n.kcal), 0);
   return tot;
 }
@@ -402,7 +417,7 @@ function viewRefeicao(id) {
 function viewMacros() {
   const k = curDay();
   const g = S.goals;
-  const rows = sortedPlan().map((m) => { const o = m.opts[optIndex(m, k)]; const x = sum(o ? o.items : []); return { name: m.name + (m.opts.length > 1 && o ? ` · ${o.name}` : ''), ...x }; });
+  const rows = sortedPlan().map((m) => { const x = planned(m, k); return { name: m.name + (m.opts.length > 1 && x.name ? ` · ${x.name}` : ''), k: x.k, p: x.p, c: x.c, g: x.g }; });
   const tot = rows.reduce((a, r) => ({ k: a.k + r.k, p: a.p + r.p, c: a.c + r.c, g: a.g + r.g }), { k: 0, p: 0, c: 0, g: 0 });
   const lc = lastCheckin();
   const pesoAtual = lc ? lc.peso : num(g.peso);
@@ -417,8 +432,8 @@ function viewMacros() {
       <div class="small muted" style="margin-top:8px">Com as opções escolhidas para ${k === todayKey() ? 'hoje' : ddmm(k)}.</div></section>
   </div><div class="col">
     <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2></div>
-      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}</div>
-      <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso meta.` : 'Peso meta alcançado.') : 'Defina o peso meta para ver quanto falta.'}</div></section>
+      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso de referência (kg)', 'meta', 'number', 'ex.: 76', '0.1')}</div>
+      <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso de referência.` : 'Peso de referência alcançado.') : 'O peso meta é só referência. A cintura e as medidas, em Progresso, mostram melhor a perda de gordura.'}</div></section>
   </div></div>`;
 }
 
@@ -501,10 +516,10 @@ function viewProgresso() {
       <details class="more"><summary>Outras medidas <span class="muted">· a cada 2 a 4 semanas</span></summary>
         <div class="grid2" style="margin-top:12px">${MEDIDAS.slice(1).map(mIn).join('')}</div>
       </details>
-      <label class="field">Data<input class="input" id="ck-data" type="date" value="${k}"></label>
+      <label class="field">Data<input class="input" id="ck-data" type="date" value="${k}" max="${k}"></label>
       <button type="button" class="btn block" data-act="checkin">Registrar check-in</button></section>
     <section class="card stack chart" aria-label="Gráfico do peso"><div class="between"><h2 class="label">Peso</h2><span class="muted small">${lc ? `<span class="num" style="font-size:22px;color:var(--ink)">${nf(lc.peso, 1)}</span> kg${diff !== null ? ' · ' + (diff > 0 ? '+' : '') + nf(diff, 1) + ' kg' : ''}` : ''}</span></div>${chart()}
-      <div class="small muted">Tracejado cinza: ritmo de 0,5 kg por semana${num(g.meta) ? '. Pontilhado verde: peso meta' : ''}.</div></section>
+      <div class="small muted">Tracejado cinza: ritmo de 0,5 kg por semana${num(g.meta) ? '. Pontilhado verde: peso de referência' : ''}.</div></section>
   </div><div class="col">
     ${evol.length ? `<section class="card" aria-label="Medidas"><h2 class="label" style="margin-bottom:6px">Medidas (cm)</h2>
       <table class="table"><thead><tr><th>Medida</th><th>Primeira</th><th>Última</th><th>Variação</th></tr></thead><tbody>${evol.join('')}</tbody></table>
@@ -645,11 +660,33 @@ function authView(mode) {
 let sb = null;
 try { if (CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase) sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey); } catch (e) { sb = null; }
 let pushTimer = null;
+const SYNC_KEY = 'personalnutri_sincronizado_em';
+const syncedAt = () => { try { return Number(localStorage.getItem(SYNC_KEY)) || 0; } catch (e) { return 0; } };
+const markSynced = (t) => { try { localStorage.setItem(SYNC_KEY, String(t || 0)); } catch (e) { /* ignore */ } };
+function mergeStates(local, remote) {
+  const out = { ...remote };
+  out.days = { ...remote.days };
+  Object.keys(local.days).forEach((k) => {
+    const l = local.days[k], r = remote.days[k];
+    if (!r || (l.u || 0) > (r.u || 0)) out.days[k] = l;
+  });
+  const byId = new Map();
+  remote.drinks.concat(local.drinks).forEach((x) => byId.set(x.id, x));
+  out.drinks = [...byId.values()].sort((x, y) => x.date.localeCompare(y.date));
+  const byDate = new Map();
+  remote.checkins.forEach((c) => byDate.set(c.date, c));
+  local.checkins.forEach((c) => byDate.set(c.date, { ...(byDate.get(c.date) || {}), ...c }));
+  out.checkins = [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date));
+  out.free = { ...remote.free, ...local.free };
+  return out;
+}
 function setSync(msg) { UI.sync = msg; document.querySelectorAll('[data-sync]').forEach((el) => { el.textContent = msg; }); }
 function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(push, 900); }
 async function push() {
   if (!sb || !UI.auth.user) return;
+  const sentAt = S.updatedAt;
   const { error } = await sb.from('dieta_estado').upsert({ user_id: UI.auth.user.id, data: S, updated_at: new Date().toISOString() });
+  if (!error) markSynced(sentAt);
   setSync(error ? 'Erro ao sincronizar: ' + error.message : 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
 }
 async function pull() {
@@ -657,8 +694,20 @@ async function pull() {
   const { data, error } = await sb.from('dieta_estado').select('data, updated_at').eq('user_id', UI.auth.user.id).maybeSingle();
   if (error) { setSync('Erro ao sincronizar: ' + error.message); return; }
   if (data && data.data && (data.data.updatedAt || 0) > (S.updatedAt || 0)) {
-    S = normalizeState(data.data);
+    const remote = normalizeState(data.data);
+    const pending = (S.updatedAt || 0) > syncedAt();
+    if (pending) {
+      /* Os dois aparelhos mudaram: junta dia a dia e envia o resultado */
+      S = mergeStates(S, remote);
+      S.updatedAt = Date.now();
+      try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
+      render();
+      await push();
+      return;
+    }
+    S = remote;
     try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
+    markSynced(S.updatedAt);
     setSync('Dados trazidos da nuvem');
     render();
   } else {
@@ -839,7 +888,7 @@ async function exportHistory() {
       const dn = DIAS[d.getDay()];
       let feitas = 0, kPlano = 0, kAnot = 0, p = 0, c = 0, gg = 0;
       const textos = [];
-      sortedPlan().forEach((m) => {
+      mealsOfDay(k).forEach((m) => {
         const done = isDone(m, k);
         const pl = planned(m, k);
         const ns = notesOf(k, m.id);
@@ -860,7 +909,7 @@ async function exportHistory() {
       const bebidas = S.drinks.filter((x) => x.date === k);
       const kBeb = bebidas.reduce((a, x) => a + num(x.kcal), 0);
       const ck = S.checkins.find((x) => x.date === k);
-      const livre = notesOf(k, FORA).concat(...S.plan.map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || S.free[weekStart(k)] === k;
+      const livre = notesOf(k, FORA).concat(...mealsOfDay(k).map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || S.free[weekStart(k)] === k;
       const total = kPlano + kAnot + kBeb;
       resumo.push({
         'Data': k, 'Dia': dn, 'Refeições feitas': feitas, 'Refeições no plano': S.plan.length,
@@ -884,7 +933,7 @@ async function exportHistory() {
     ];
     const metas = [
       { 'Meta': 'Calorias/dia', 'Valor': g.kcal }, { 'Meta': 'Proteína (g)', 'Valor': g.prot }, { 'Meta': 'Carboidrato (g)', 'Valor': g.carb },
-      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Água (ml/dia)', 'Valor': g.agua }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }
+      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Água (ml/dia)', 'Valor': g.agua }, { 'Meta': 'Peso de referência (kg)', 'Valor': g.meta }
     ];
     const plano = [];
     S.plan.forEach((m) => m.opts.forEach((o) => o.items.forEach((i) => plano.push({ 'Refeição': m.name, 'Horário': m.time, 'Opção': o.name, 'Alimento': i.food, 'Quantidade': i.qty, 'kcal': num(i.k), 'Proteína (g)': num(i.p), 'Carbo (g)': num(i.c), 'Gordura (g)': num(i.g) }))));
@@ -960,7 +1009,18 @@ const ACT = {
     render();
   },
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
-  free: () => { const ws = weekStart(); if (S.free[ws]) delete S.free[ws]; else S.free[ws] = todayKey(); save(); },
+  free: () => {
+    const ws = weekStart();
+    if (S.free[ws]) {
+      for (let i = 0; i < 7; i++) {
+        const day = addDays(ws, i);
+        const dd = S.days[day];
+        if (dd && dd.notes && Object.values(dd.notes).some((arr) => arr.some((n) => n.type === 'livre'))) { toast('A livre está anotada em ' + ddmm(day) + '. Apague a anotação em Hoje.'); return; }
+      }
+      delete S.free[ws];
+    } else S.free[ws] = todayKey();
+    save();
+  },
   drinktype: (el) => { UI.drink.type = el.dataset.v; UI.drink.ml = DRINKS[el.dataset.v].ml; render(); },
   cups: (el) => { UI.drink.cups = Math.max(1, UI.drink.cups + (+el.dataset.v)); render(); },
   ml: (el) => { const st = DRINKS[UI.drink.type].step; UI.drink.ml = Math.max(st, UI.drink.ml + st * (+el.dataset.v)); render(); },
@@ -974,7 +1034,8 @@ const ACT = {
   },
   deldrink: (el) => { S.drinks = S.drinks.filter((d) => d.id !== el.dataset.id); save(); },
   checkin: () => {
-    const date = document.getElementById('ck-data').value || todayKey();
+    let date = document.getElementById('ck-data').value || todayKey();
+    if (date > todayKey()) date = todayKey();
     const vals = { peso: num(document.getElementById('ck-peso').value) };
     MEDIDAS.forEach((m) => { vals[m.id] = num((document.getElementById('ck-' + m.id) || {}).value); });
     if (!Object.values(vals).some(Boolean)) { toast('Informe o peso ou alguma medida'); return; }
@@ -998,7 +1059,7 @@ const ACT = {
   export: () => exportPlan(),
   reset: () => { if (!confirm('Trocar o plano atual pelo plano padrão?')) return; S.plan = defaultPlan(); UI.plano = { meal: 0, opt: {} }; save(); toast('Plano padrão restaurado'); },
   skipauth: () => { try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* ignore */ } UI.auth.msg = ''; UI.auth.info = ''; location.hash = '#hoje'; render(); },
-  logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
+  logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } markSynced(0); await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
   syncnow: async () => { await pull(); toast(UI.sync || 'Sincronizado'); }
 };
 
