@@ -71,7 +71,8 @@ const UI = {
   plano: { meal: 0, opt: {} },
   drink: { type: 'cerveja', cups: 1, ml: DRINKS.cerveja.ml },
   auth: { user: null, ready: false, msg: '', info: '', busy: false, recovery: false, f: {} },
-  sync: ''
+  sync: '',
+  note: null
 };
 
 function save(opts) {
@@ -108,19 +109,47 @@ function toast(msg) {
   toast.t = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function dayRec(k) { if (!S.days[k]) S.days[k] = { sel: {}, done: {} }; return S.days[k]; }
+function dayRec(k) {
+  if (!S.days[k]) S.days[k] = {};
+  const d = S.days[k];
+  d.sel = d.sel || {}; d.done = d.done || {}; d.snap = d.snap || {}; d.notes = d.notes || {};
+  return d;
+}
+const FORA = '_fora';
+const NOTE_TYPES = { troca: 'Comi outra coisa', extra: 'Comi a mais', livre: 'Refeição livre' };
+const NOTE_SHORT = { troca: 'Troca', extra: 'A mais', livre: 'Refeição livre' };
+const notesOf = (k, mid) => (S.days[k] && S.days[k].notes && S.days[k].notes[mid]) || [];
+const ZERO = () => ({ k: 0, p: 0, c: 0, g: 0 });
 function optIndex(meal, k = todayKey()) {
   const i = S.days[k] && S.days[k].sel ? S.days[k].sel[meal.id] : 0;
   return Math.min(Math.max(0, i || 0), Math.max(0, meal.opts.length - 1));
 }
 const isDone = (meal, k = todayKey()) => !!(S.days[k] && S.days[k].done && S.days[k].done[meal.id]);
 const sortedPlan = () => S.plan.slice().sort((a, b) => String(a.time).localeCompare(String(b.time)));
+function planned(m, k = todayKey()) {
+  const sn = S.days[k] && S.days[k].snap && S.days[k].snap[m.id];
+  if (sn && isDone(m, k)) return { name: sn.name, k: sn.k, p: sn.p, c: sn.c, g: sn.g };
+  const o = m.opts[optIndex(m, k)];
+  return o ? { name: o.name, ...sum(o.items) } : { name: '', ...ZERO() };
+}
+function snapshot(m, k) {
+  const o = m.opts[optIndex(m, k)];
+  if (!o) return null;
+  const x = sum(o.items);
+  return { name: o.name, k: x.k, p: x.p, c: x.c, g: x.g };
+}
+/* O que entrou de uma refeição: o plano (se feita) ou a troca anotada, mais o que foi comido a mais */
+function mealIntake(m, k) {
+  const ns = notesOf(k, m.id);
+  const repl = ns.filter((n) => n.type === 'troca' || n.type === 'livre');
+  const extra = ns.filter((n) => n.type === 'extra');
+  const base = repl.length ? { k: repl.reduce((a, n) => a + num(n.kcal), 0), p: 0, c: 0, g: 0 } : isDone(m, k) ? planned(m, k) : ZERO();
+  return { k: base.k + extra.reduce((a, n) => a + num(n.kcal), 0), p: base.p, c: base.c, g: base.g, replaced: repl.length > 0 };
+}
 function consumed(k = todayKey()) {
-  return S.plan.reduce((a, m) => {
-    if (!isDone(m, k) || !m.opts.length) return a;
-    const x = sum(m.opts[optIndex(m, k)].items);
-    return { k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, g: a.g + x.g };
-  }, { k: 0, p: 0, c: 0, g: 0 });
+  const tot = S.plan.reduce((a, m) => { const x = mealIntake(m, k); return { k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, g: a.g + x.g }; }, ZERO());
+  tot.k += notesOf(k, FORA).reduce((a, n) => a + num(n.kcal), 0);
+  return tot;
 }
 const doneCount = (k = todayKey()) => S.plan.filter((m) => isDone(m, k)).length;
 function planDefaultTotals() {
@@ -232,10 +261,37 @@ function mealCard(m, k) {
       <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span><span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
       ${chips}
       <div class="meal-items">${m.opts.length > 1 ? `<strong style="font-weight:600">${esc(o.name)}:</strong> ` : ''}${esc(o.items.map((i) => i.food + ' ' + i.qty).join(' · '))}</div>
-      <a class="opt-link${m.opts.length > 1 ? ' only-mobile' : ''}" href="#refeicao/${encodeURIComponent(m.id)}">${m.opts.length > 1 ? m.opts.length + ' opções' : 'Detalhes'}</a>
+      ${notesList(k, m.id)}
+      <div class="row" style="gap:8px;flex-wrap:wrap"><a class="opt-link${m.opts.length > 1 ? ' only-mobile' : ''}" href="#refeicao/${encodeURIComponent(m.id)}">${m.opts.length > 1 ? m.opts.length + ' opções' : 'Detalhes'}</a>${UI.note && UI.note.meal === m.id ? '' : `<button type="button" class="note-btn" data-act="noteopen" data-meal="${esc(m.id)}" aria-label="Anotar o que comeu em ${esc(m.name)}">+ Anotar</button>`}</div>
+      ${UI.note && UI.note.meal === m.id ? noteEditor(true) : ''}
     </div>
     <button type="button" class="check ${done ? 'on' : ''}" data-act="done" data-meal="${esc(m.id)}" aria-pressed="${done}" aria-label="${done ? 'Desmarcar' : 'Marcar'} ${esc(m.name)}">${done ? I.check : ''}</button>
   </article>`;
+}
+function notesList(k, mid) {
+  const ns = notesOf(k, mid);
+  if (!ns.length) return '';
+  return `<ul class="notes">${ns.map((n) => `<li class="note ${n.type}"><span><strong>${NOTE_SHORT[n.type] || 'Anotação'}:</strong> ${esc(n.text || 'sem descrição')}${num(n.kcal) ? ` · ≈ ${nf(n.kcal)} kcal` : ''}</span><button type="button" class="del-btn" data-act="notedel" data-meal="${esc(mid)}" data-id="${esc(n.id)}" aria-label="Apagar anotação">${I.x}</button></li>`).join('')}</ul>`;
+}
+function noteEditor(withTypes) {
+  const N = UI.note;
+  return `<div class="note-editor" role="group" aria-label="Anotar refeição">
+    ${withTypes ? `<div class="chips">${Object.keys(NOTE_TYPES).map((t) => `<button type="button" class="chip small-chip ${N.type === t ? 'on' : ''}" aria-pressed="${N.type === t}" data-act="notetype" data-v="${t}">${NOTE_TYPES[t]}</button>`).join('')}</div>` : ''}
+    <label class="field">O que você comeu<textarea class="input" id="note-text" data-in="note" data-f="text" rows="2" placeholder="${N.type === 'extra' ? 'ex.: 2 bombons' : 'ex.: 2 fatias de pizza de calabresa'}">${esc(N.text)}</textarea></label>
+    <label class="field">Calorias estimadas (opcional)<input class="input" type="number" inputmode="numeric" data-in="note" data-f="kcal" value="${esc(N.kcal)}" placeholder="ex.: 600"></label>
+    ${N.type === 'livre' ? '<div class="small muted">Também marca a refeição livre desta semana.</div>' : ''}
+    ${N.type === 'troca' || N.type === 'livre' ? '<div class="small muted">Substitui a refeição do plano. Sem calorias, ela fica registrada, mas não entra na soma do dia.</div>' : ''}
+    <div class="toolbar"><button type="button" class="btn small" data-act="notesave">Salvar</button><button type="button" class="btn small ghost" data-act="notecancel">Cancelar</button></div>
+  </div>`;
+}
+function foraCard(k) {
+  const open = UI.note && UI.note.meal === FORA;
+  return `<article class="card meal" style="align-items:flex-start"><div class="meal-main">
+    <div class="meal-head"><span class="meal-name">Fora das refeições</span></div>
+    <div class="meal-items">Beliscos e qualquer coisa que não estava no plano.</div>
+    ${notesList(k, FORA)}
+    ${open ? noteEditor(false) : `<div><button type="button" class="note-btn" data-act="noteopen" data-meal="${FORA}">+ Anotar</button></div>`}
+  </div></article>`;
 }
 function viewHoje() {
   const k = todayKey();
@@ -261,7 +317,7 @@ function viewHoje() {
       ${weekGrid().html}<a class="small" style="font-weight:600;text-decoration:none" href="#progresso">Fazer check-in</a></section>
     <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
   </div>`;
-  const meals = sortedPlan().map((m) => mealCard(m, k)).join('');
+  const meals = sortedPlan().map((m) => mealCard(m, k)).join('') + (S.plan.length ? foraCard(k) : '');
   return header('Hoje', esc(longDate(k)) + (daysLeft !== null && daysLeft > 0 ? ` · ${daysLeft} dias até ${ddmm(g.data)}` : '')) +
     `<div class="split"><div class="col"><div class="only-mobile">${summary}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
@@ -383,6 +439,9 @@ function viewProgresso() {
     <section class="card" aria-label="Histórico"><h2 class="label" style="margin-bottom:6px">Histórico</h2>
       ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${e.slice().reverse().map((x) => `<tr><td>${ddmm(x.date)}</td><td><strong>${nf(x.peso, 1)} kg</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
     <section class="card stack" aria-label="Esta semana"><div class="between label"><span>Esta semana</span><span>${wg.done} de ${wg.possible} refeições</span></div>${wg.html}</section>
+    <section class="card stack" aria-label="Exportar histórico"><div class="meal-name">Histórico completo</div>
+      <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, as bebidas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
+      <button type="button" class="btn small" data-act="exporthist">Exportar histórico</button></section>
   </div></div>`;
 }
 
@@ -683,11 +742,125 @@ async function exportPlan() {
   }
 }
 
+function historyDays() {
+  const keys = Object.keys(S.days).concat(S.drinks.map((d) => d.date), S.checkins.map((c) => c.date)).filter(Boolean).sort();
+  if (!keys.length) return [];
+  const out = [];
+  const end = todayKey();
+  for (let k = keys[0]; k <= end; k = addDays(k, 1)) out.push(k);
+  return out;
+}
+async function exportHistory() {
+  const days = historyDays();
+  if (!days.length) { toast('Ainda não há histórico para exportar'); return; }
+  try {
+    await ensureXLSX();
+    const g = S.goals;
+    const sim = (b) => (b ? 'sim' : 'não');
+    const resumo = [], refeicoes = [], anotacoes = [];
+    days.forEach((k) => {
+      const d = parseKey(k);
+      const dn = DIAS[d.getDay()];
+      let feitas = 0, kPlano = 0, kAnot = 0, p = 0, c = 0, gg = 0;
+      const textos = [];
+      sortedPlan().forEach((m) => {
+        const done = isDone(m, k);
+        const pl = planned(m, k);
+        const ns = notesOf(k, m.id);
+        const intake = mealIntake(m, k);
+        if (done) feitas++;
+        if (done && !intake.replaced) { kPlano += pl.k; p += pl.p; c += pl.c; gg += pl.g; }
+        kAnot += intake.k - (done && !intake.replaced ? pl.k : 0);
+        refeicoes.push({
+          'Data': k, 'Dia': dn, 'Refeição': m.name, 'Horário': m.time, 'Opção do plano': pl.name,
+          'Feita': sim(done), 'Seguiu o plano': done ? sim(!intake.replaced) : '',
+          'kcal do plano': done && !intake.replaced ? pl.k : '', 'Proteína (g)': done && !intake.replaced ? pl.p : '',
+          'Carbo (g)': done && !intake.replaced ? pl.c : '', 'Gordura (g)': done && !intake.replaced ? pl.g : '',
+          'Anotações': ns.map((n) => (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '') + (num(n.kcal) ? ' (' + n.kcal + ' kcal)' : '')).join(' | ')
+        });
+        ns.forEach((n) => { textos.push(m.name + ' – ' + (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': m.name, 'Tipo': NOTE_TYPES[n.type] || n.type, 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '' }); });
+      });
+      notesOf(k, FORA).forEach((n) => { kAnot += num(n.kcal); textos.push('Fora das refeições: ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': 'Fora das refeições', 'Tipo': NOTE_TYPES[n.type] || n.type, 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '' }); });
+      const bebidas = S.drinks.filter((x) => x.date === k);
+      const kBeb = bebidas.reduce((a, x) => a + num(x.kcal), 0);
+      const ck = S.checkins.find((x) => x.date === k);
+      const livre = notesOf(k, FORA).concat(...S.plan.map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || S.free[weekStart(k)] === k;
+      const total = kPlano + kAnot + kBeb;
+      resumo.push({
+        'Data': k, 'Dia': dn, 'Refeições feitas': feitas, 'Refeições no plano': S.plan.length,
+        'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida': Math.round(kBeb), 'kcal total': Math.round(total),
+        'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
+        'Proteína do plano (g)': Math.round(p), 'Carbo do plano (g)': Math.round(c), 'Gordura do plano (g)': Math.round(gg),
+        'Refeição livre': sim(livre), 'Bebida (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
+        'Peso (kg)': ck ? ck.peso : '', 'Cintura (cm)': ck && ck.cintura ? ck.cintura : '', 'Anotações': textos.join(' | ')
+      });
+    });
+    const leia = [
+      { 'Leia-me': 'Exportado do PersonalNutri em ' + new Date().toLocaleString('pt-BR') + '.' },
+      { 'Leia-me': 'Resumo diário: uma linha por dia, inclusive dias sem nenhum registro (refeições feitas = 0).' },
+      { 'Leia-me': 'kcal do plano: soma das refeições marcadas como feitas, pela opção do plano escolhida no dia. Os macros (proteína, carbo, gordura) só existem para essas refeições.' },
+      { 'Leia-me': 'kcal anotadas: estimativas digitadas à mão para trocas, comida a mais, refeição livre e beliscos. Anotação sem kcal fica registrada, mas não soma.' },
+      { 'Leia-me': 'Refeição sem marcação não significa jejum: pode ser só esquecimento de marcar.' },
+      { 'Leia-me': 'kcal de bebida: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
+      { 'Leia-me': 'Peso medido em jejum; cintura na altura do umbigo.' }
+    ];
+    const metas = [
+      { 'Meta': 'Calorias/dia', 'Valor': g.kcal }, { 'Meta': 'Proteína (g)', 'Valor': g.prot }, { 'Meta': 'Carboidrato (g)', 'Valor': g.carb },
+      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }, { 'Meta': 'Data alvo', 'Valor': g.data }
+    ];
+    const plano = [];
+    S.plan.forEach((m) => m.opts.forEach((o) => o.items.forEach((i) => plano.push({ 'Refeição': m.name, 'Horário': m.time, 'Opção': o.name, 'Alimento': i.food, 'Quantidade': i.qty, 'kcal': num(i.k), 'Proteína (g)': num(i.p), 'Carbo (g)': num(i.c), 'Gordura (g)': num(i.g) }))));
+    const wb = XLSX.utils.book_new();
+    const add = (rows, name, cols) => { const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': 'Sem registros' }]); if (cols) ws['!cols'] = cols.map((w) => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
+    add(leia, 'Leia-me', [110]);
+    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 9, 9, 9, 9, 80]);
+    add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
+    add(anotacoes, 'Anotações', [11, 18, 16, 50, 10]);
+    add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas');
+    add(S.checkins.map((x) => ({ 'Data': x.date, 'Peso (kg)': x.peso, 'Cintura (cm)': x.cintura || '' })), 'Check-ins');
+    add(metas, 'Metas', [20, 12]);
+    add(plano, 'Plano atual', [16, 8, 28, 32, 18, 6, 12, 10, 12]);
+    XLSX.writeFile(wb, 'personalnutri-historico-' + todayKey() + '.xlsx');
+  } catch (e) {
+    toast(e.message || 'Não consegui gerar o histórico.');
+  }
+}
+
 /* ---------- Ações ---------- */
 const ACT = {
   theme: (el) => { S.theme = el.dataset.v; save(); },
-  done: (el) => { const d = dayRec(todayKey()); d.done[el.dataset.meal] = !d.done[el.dataset.meal]; save(); },
-  pickopt: (el) => { const d = dayRec(todayKey()); d.sel[el.dataset.meal] = +el.dataset.i; save(); },
+  done: (el) => {
+    const k = todayKey(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
+    d.done[id] = !d.done[id];
+    if (d.done[id] && m) d.snap[id] = snapshot(m, k); else delete d.snap[id];
+    save();
+  },
+  pickopt: (el) => {
+    const k = todayKey(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
+    d.sel[id] = +el.dataset.i;
+    if (d.done[id] && m) d.snap[id] = snapshot(m, k);
+    save();
+  },
+  noteopen: (el) => { UI.note = { meal: el.dataset.meal, type: el.dataset.meal === FORA ? 'extra' : 'troca', text: '', kcal: '' }; render(); const t = document.getElementById('note-text'); if (t) t.focus(); },
+  notetype: (el) => { UI.note.type = el.dataset.v; render(); },
+  notecancel: () => { UI.note = null; render(); },
+  notesave: () => {
+    const N = UI.note; if (!N) return;
+    if (!String(N.text).trim() && !num(N.kcal)) { toast('Escreva o que comeu ou as calorias'); return; }
+    const k = todayKey(); const d = dayRec(k);
+    (d.notes[N.meal] = d.notes[N.meal] || []).push({ id: uid(), type: N.type, text: String(N.text).trim(), kcal: num(N.kcal) || '', at: new Date().toISOString() });
+    if (N.meal !== FORA && (N.type === 'troca' || N.type === 'livre')) { d.done[N.meal] = true; delete d.snap[N.meal]; }
+    if (N.type === 'livre') S.free[weekStart(k)] = k;
+    UI.note = null;
+    save(); toast('Anotado');
+  },
+  notedel: (el) => {
+    const k = todayKey(); const d = dayRec(k); const mid = el.dataset.meal;
+    d.notes[mid] = (d.notes[mid] || []).filter((n) => n.id !== el.dataset.id);
+    if (!d.notes[mid].length) delete d.notes[mid];
+    save();
+  },
+  exporthist: () => exportHistory(),
   free: () => { const ws = weekStart(); if (S.free[ws]) delete S.free[ws]; else S.free[ws] = todayKey(); save(); },
   drinktype: (el) => { UI.drink.type = el.dataset.v; UI.drink.ml = DRINKS[el.dataset.v].ml; render(); },
   cups: (el) => { UI.drink.cups = Math.max(1, UI.drink.cups + (+el.dataset.v)); render(); },
@@ -741,6 +914,7 @@ window.addEventListener('hashchange', () => { if (AUTH_ROUTES.includes(route().n
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.id && el.id.startsWith('auth-')) { UI.auth.f[el.id] = el.value; return; }
+  if (el.dataset && el.dataset.in === 'note') { if (UI.note) UI.note[el.dataset.f] = el.value; return; }
   const kind = el.dataset && el.dataset.in;
   if (!kind) return;
   if (kind === 'goal') {
