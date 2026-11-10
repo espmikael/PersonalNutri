@@ -21,18 +21,24 @@ const opcoesAlmoco = () => [
 function defaultPlan() {
   return [
     { id: 'cafe', name: 'Café da manhã', time: '07:00', opts: [
-      { name: 'Shake', tip: 'Fruta: banana, maçã, 8 morangos ou 1/2 manga.', items: [it('Whey protein', '1 dose', 120, 24, 3, 2), it('Leite desnatado', '300 ml', 105, 10, 15, 1), it('Fruta', '1 unidade', 90, 1, 23, 0)] },
+      { name: 'Shake', tip: 'Bata tudo junto, com o iogurte. Fruta: banana, maçã, 8 morangos ou 1/2 manga.', items: [it('Whey protein', '1 dose', 120, 24, 3, 2), it('Leite desnatado', '300 ml', 105, 10, 15, 1), it('Iogurte natural', '1 pote · 170 g', 105, 7, 9, 6), it('Fruta', '1 unidade', 90, 1, 23, 0)] },
       { name: 'Panqueca de banana', tip: 'Amasse a banana, misture os ovos e o farelo e doure em fogo baixo.', items: [it('Banana', '1 unidade', 90, 1, 23, 0), it('Ovos', '2 unidades', 145, 13, 1, 10), it('Farelo de aveia', '3 col. sopa · 33 g', 85, 6, 18, 2)] },
       { name: 'Crepioca', tip: '', items: [it('Tapioca', '3 col. sopa · 45 g', 155, 0, 38, 0), it('Ovos', '2 unidades', 145, 13, 1, 10), it('Requeijão light', '1 col. sopa · 20 g', 40, 2, 1, 2)] }
     ] },
     { id: 'almoco', name: 'Almoço', time: '12:00', opts: opcoesAlmoco() },
     { id: 'pre', name: 'Pré-treino', time: '16:00', opts: [
-      { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] }
+      { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Banana', '1 unidade', 90, 1, 23, 0)] }
     ] },
-    { id: 'jantar', name: 'Jantar', time: '21:00', opts: opcoesAlmoco() }
+    { id: 'jantar', name: 'Jantar', time: '21:00', opts: opcoesAlmoco() },
+    { id: 'ceia', name: 'Ceia', time: '22:30', opts: [
+      { name: 'Mamão', tip: 'Fruta leve e com fibra, boa depois da janta. Troque à vontade entre as opções.', items: [it('Mamão papaia', '1/2 unidade', 60, 1, 15, 0)] },
+      { name: 'Kiwi', tip: '', items: [it('Kiwi', '1 unidade', 45, 1, 11, 0)] },
+      { name: 'Morangos', tip: '', items: [it('Morangos', '10 unidades', 35, 1, 8, 0)] },
+      { name: 'Maçã', tip: '', items: [it('Maçã', '1 unidade', 70, 0, 19, 0)] }
+    ] }
   ];
 }
-const DEFAULT_GOALS = { kcal: 1855, prot: 175, carb: 195, fat: 40, peso: 81, meta: '', data: '2027-01-19' };
+const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, peso: 81, meta: '', data: '2027-01-19' };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
   vinho: { label: 'Vinho', k: 0.85, ml: 150, step: 25 },
@@ -297,7 +303,7 @@ function viewMacros() {
       <div class="small muted" style="margin-top:8px">Com as opções escolhidas para hoje.</div></section>
   </div><div class="col">
     <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2><span class="small" style="font-weight:600;color:var(--pri-text)">${days !== null && days > 0 ? days + ' dias até a data alvo' : ''}</span></div>
-      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1855', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '195', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}${field('Data alvo', 'data', 'date')}</div>
+      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}${field('Data alvo', 'data', 'date')}</div>
       <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso meta.` : 'Peso meta alcançado.') : 'Defina o peso meta para ver quanto falta.'}</div></section>
   </div></div>`;
 }
