@@ -59,6 +59,27 @@ Colunas (acentos e maiúsculas não importam):
 - Se as colunas Refeição, Horário ou Opção ficarem vazias, o app repete o valor da linha de cima.
 - Números aceitam vírgula ou ponto.
 
+## Anotar o que comeu de verdade
+
+Cada refeição na tela **Hoje** tem um botão **+ Anotar**:
+
+- **Comi outra coisa**: substitui a refeição do plano (marca como feita).
+- **Comi a mais**: soma em cima do que estava no plano.
+- **Refeição livre**: substitui a refeição e já marca a refeição livre da semana.
+
+O card **Fora das refeições**, no fim do dia, serve para beliscos. As calorias de uma anotação são opcionais e entram só nas calorias do dia; proteína, carbo e gordura vêm apenas das refeições do plano.
+
+Quando uma refeição é marcada como feita, o app guarda a opção e os macros daquele dia. Mudar o plano depois não altera o histórico.
+
+## Exportar o histórico
+
+Em **Progresso › Exportar histórico** sai `personalnutri-historico-AAAA-MM-DD.xlsx`, pensado para mandar a uma IA analisar. Abas:
+
+- **Leia-me**: como cada número foi calculado.
+- **Resumo diário**: uma linha por dia (inclusive dias sem registro), com refeições feitas, kcal do plano, kcal anotadas, kcal de bebida, total, diferença da meta, macros, refeição livre, peso, cintura e anotações.
+- **Refeições**: cada refeição de cada dia, com a opção escolhida, se foi feita, se seguiu o plano e as anotações.
+- **Anotações**, **Bebidas**, **Check-ins**, **Metas** e **Plano atual**.
+
 ## Plano padrão
 
 Fica em `defaultPlan()`, no `app.js`. Hoje: café da manhã (shake com iogurte, panqueca ou crepioca), almoço e jantar (com feijão, sem feijão, massa, batata ou batata-doce), pré-treino às 16h (sanduíche com banana) e ceia (mamão, kiwi, morangos ou maçã). Totais com a primeira opção de cada refeição: cerca de 1.860 kcal, 175 g de proteína, 203 g de carboidrato e 37 g de gordura. Os macros são estimativas a partir de tabelas; corrija pelo rótulo no editor quando usar uma marca específica.
