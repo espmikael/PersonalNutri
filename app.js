@@ -72,8 +72,28 @@ const UI = {
   drink: { type: 'cerveja', cups: 1, ml: DRINKS.cerveja.ml },
   auth: { user: null, ready: false, msg: '', info: '', busy: false, recovery: false, f: {} },
   sync: '',
-  note: null
+  note: null,
+  day: null
 };
+const MAX_BACK = 14;
+/* Dia que as telas Hoje, Refeição e Macros mostram e editam (hoje, por padrão) */
+function curDay() {
+  const t = todayKey();
+  if (!UI.day || UI.day > t || UI.day < addDays(t, -MAX_BACK)) UI.day = t;
+  return UI.day;
+}
+function dayTitle(k) {
+  const t = todayKey();
+  if (k === t) return 'Hoje';
+  if (k === addDays(t, -1)) return 'Ontem';
+  return DIAS[parseKey(k).getDay()];
+}
+function dayNav(k) {
+  const t = todayKey();
+  const canBack = k > addDays(t, -MAX_BACK);
+  const isToday = k === t;
+  return `<span class="daynav"><button type="button" class="daynav-btn" data-act="day" data-v="-1" aria-label="Dia anterior" ${canBack ? '' : 'disabled'}>${svg('<path d="M15 5l-7 7 7 7"/>', 16)}</button><span>${esc(longDate(k))}</span><button type="button" class="daynav-btn" data-act="day" data-v="1" aria-label="Próximo dia" ${isToday ? 'disabled' : ''}>${svg('<path d="M9 5l7 7-7 7"/>', 16)}</button>${isToday ? '' : '<button type="button" class="daynav-today" data-act="day" data-v="0">Ir para hoje</button>'}</span>`;
+}
 
 function save(opts) {
   S.updatedAt = Date.now();
@@ -112,8 +132,24 @@ function toast(msg) {
 function dayRec(k) {
   if (!S.days[k]) S.days[k] = {};
   const d = S.days[k];
-  d.sel = d.sel || {}; d.done = d.done || {}; d.snap = d.snap || {}; d.notes = d.notes || {};
+  d.sel = d.sel || {}; d.done = d.done || {}; d.snap = d.snap || {}; d.notes = d.notes || {}; d.byNote = d.byNote || {};
   return d;
+}
+function dropReplacements(k, mid) {
+  const d = dayRec(k);
+  const had = (d.notes[mid] || []).some((n) => n.type === 'livre');
+  d.notes[mid] = (d.notes[mid] || []).filter((n) => n.type !== 'troca' && n.type !== 'livre');
+  if (!d.notes[mid].length) delete d.notes[mid];
+  if (had) releaseFree(k);
+}
+/* Libera a refeição livre da semana se nenhuma outra anotação de livre continuar nessa semana */
+function releaseFree(k) {
+  const ws = weekStart(k);
+  for (let i = 0; i < 7; i++) {
+    const day = S.days[addDays(ws, i)];
+    if (day && day.notes && Object.values(day.notes).some((arr) => arr.some((n) => n.type === 'livre'))) return;
+  }
+  delete S.free[ws];
 }
 const FORA = '_fora';
 const NOTE_TYPES = { troca: 'Comi outra coisa', extra: 'Comi a mais', livre: 'Refeição livre' };
@@ -215,7 +251,8 @@ function render() {
   if (UI.auth.recovery) { $app.innerHTML = authView('nova-senha'); return; }
   if (UI.auth.user && AUTH_ROUTES.includes(r.name)) { location.replace('#hoje'); return; }
   if (AUTH_ROUTES.includes(r.name)) { $app.innerHTML = authView(r.name); return; }
-  if (sb && !UI.auth.user && (!skipAuth() || r.name === 'conta')) { $app.innerHTML = authView('entrar'); return; }
+  const offlineSession = !navigator.onLine && hasStoredSession();
+  if (sb && !UI.auth.user && !offlineSession && (!skipAuth() || r.name === 'conta')) { $app.innerHTML = authView('entrar'); return; }
   const views = { hoje: viewHoje, refeicao: viewRefeicao, macros: viewMacros, extras: viewExtras, progresso: viewProgresso, plano: viewPlano, conta: viewConta };
   const fn = views[r.name] || viewHoje;
   const narrow = ['refeicao', 'extras', 'conta'].includes(r.name) ? ' narrow' : '';
@@ -305,7 +342,8 @@ function waterCard(k) {
   </section>`;
 }
 function viewHoje() {
-  const k = todayKey();
+  const k = curDay();
+  const isToday = k === todayKey();
   const c = consumed(k);
   const g = S.goals;
   const pct = num(g.kcal) ? Math.min(100, Math.round(c.k / num(g.kcal) * 100)) : 0;
@@ -321,7 +359,7 @@ function viewHoje() {
     <div class="between small" style="font-weight:600;color:var(--pri-text)"><span>${doneCount(k)} de ${S.plan.length} refeições</span><span>Ver macros</span></div>
   </a>`;
   const side = `<div class="col only-desktop">
-    <section class="card stack" aria-label="Macros"><div class="between"><h2 class="label">Consumido hoje</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar plano</a></div>${macroBars(c, g)}</section>
+    <section class="card stack" aria-label="Macros"><div class="between"><h2 class="label">${isToday ? 'Consumido hoje' : 'Consumido em ' + ddmm(k)}</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar plano</a></div>${macroBars(c, g)}</section>
     ${waterCard(k)}
     <section class="card stack" aria-label="Progresso"><h2 class="label">Progresso</h2>
       <div class="grid2"><div><div class="small muted" style="font-weight:600">Peso</div><div class="num big">${lc ? nf(lc.peso, 1) + ' kg' : '—'}</div></div><div><div class="small muted" style="font-weight:600">Cintura</div><div class="num big">${lc && lc.cintura ? nf(lc.cintura, 1) + ' cm' : '—'}</div></div></div>
@@ -329,7 +367,7 @@ function viewHoje() {
     <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
   </div>`;
   const meals = sortedPlan().map((m) => mealCard(m, k)).join('') + (S.plan.length ? foraCard(k) : '');
-  return header('Hoje', esc(longDate(k))) +
+  return header(dayTitle(k), dayNav(k)) + (isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
     `<div class="split"><div class="col"><div class="only-mobile">${summary}</div><div class="only-mobile">${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
 
@@ -337,12 +375,12 @@ function viewHoje() {
 function viewRefeicao(id) {
   const m = S.plan.find((x) => x.id === id);
   if (!m) return viewHoje();
-  const k = todayKey();
+  const k = curDay();
   const oi = optIndex(m, k);
   const o = m.opts[oi] || { name: '', items: [], tip: '' };
   const x = sum(o.items);
   const done = isDone(m, k);
-  return header(m.name, esc(m.time), ['#hoje', 'Hoje']) +
+  return header(m.name, esc(m.time) + (k === todayKey() ? '' : ' · ' + esc(longDate(k))), ['#hoje', dayTitle(k)]) +
     (m.opts.length > 1 ? `<div class="stack"><h2 class="label">Opção</h2><div class="chips">${m.opts.map((op, i) => `<button type="button" class="chip ${i === oi ? 'on' : ''}" aria-pressed="${i === oi}" data-act="pickopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(op.name)}</button>`).join('')}</div></div>` : '') +
     `<div class="card list-rows" style="padding:4px 18px">${o.items.map((i) => `<div><span style="font-weight:500">${esc(i.food)}</span><span class="qty">${esc(i.qty)}</span></div>`).join('') || '<div class="muted">Sem alimentos nesta opção.</div>'}</div>
     <div class="grid4"><div class="tile"><span class="num">${nf(x.k)}</span><span>kcal</span></div><div class="tile"><span class="num">${nf(x.p)} g</span><span>proteína</span></div><div class="tile"><span class="num">${nf(x.c)} g</span><span>carbo</span></div><div class="tile"><span class="num">${nf(x.g)} g</span><span>gordura</span></div></div>
@@ -352,7 +390,7 @@ function viewRefeicao(id) {
 
 /* ---------- Macros ---------- */
 function viewMacros() {
-  const k = todayKey();
+  const k = curDay();
   const g = S.goals;
   const rows = sortedPlan().map((m) => { const o = m.opts[optIndex(m, k)]; const x = sum(o ? o.items : []); return { name: m.name + (m.opts.length > 1 && o ? ` · ${o.name}` : ''), ...x }; });
   const tot = rows.reduce((a, r) => ({ k: a.k + r.k, p: a.p + r.p, c: a.c + r.c, g: a.g + r.g }), { k: 0, p: 0, c: 0, g: 0 });
@@ -361,12 +399,12 @@ function viewMacros() {
   const falta = num(g.meta) && pesoAtual ? Math.round((pesoAtual - num(g.meta)) * 10) / 10 : null;
   const field = (label, key, type = 'number', ph = '', step = 'any') => `<label class="field">${label}<input class="input strong" type="${type}" ${type === 'number' ? `inputmode="decimal" step="${step}"` : ''} data-in="goal" data-k="${key}" value="${esc(g[key])}" placeholder="${esc(ph)}"></label>`;
   return header('Macros', esc(longDate(k))) + `<div class="split"><div class="col">
-    <section class="card stack" aria-label="Consumido hoje"><h2 class="label">Consumido hoje</h2>${macroBars(consumed(k), g)}</section>
+    <section class="card stack" aria-label="Consumido"><h2 class="label">${k === todayKey() ? 'Consumido hoje' : 'Consumido em ' + ddmm(k)}</h2>${macroBars(consumed(k), g)}</section>
     <section class="card" aria-label="Plano do dia"><div class="between" style="align-items:center;margin-bottom:6px"><h2 class="label">Plano do dia</h2><a class="small" style="font-weight:600;text-decoration:none;min-height:44px;display:inline-flex;align-items:center" href="#plano">Editar plano</a></div>
       <table class="table"><thead><tr><th>Refeição</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${nf(r.k)}</td><td>${nf(r.p)}</td><td>${nf(r.c)}</td><td>${nf(r.g)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Total</td><td>${nf(tot.k)}</td><td>${nf(tot.p)}</td><td>${nf(tot.c)}</td><td>${nf(tot.g)}</td></tr></tfoot></table>
-      <div class="small muted" style="margin-top:8px">Com as opções escolhidas para hoje.</div></section>
+      <div class="small muted" style="margin-top:8px">Com as opções escolhidas para ${k === todayKey() ? 'hoje' : ddmm(k)}.</div></section>
   </div><div class="col">
     <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2></div>
       <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}</div>
@@ -394,6 +432,7 @@ function viewExtras() {
       <div class="field">Copos<div class="stepper"><button type="button" data-act="cups" data-v="-1" aria-label="Menos copos">−</button><span class="num">${D.cups}</span><button type="button" data-act="cups" data-v="1" aria-label="Mais copos">+</button></div></div>
       <div class="field">ml por copo<div class="stepper"><button type="button" data-act="ml" data-v="-1" aria-label="Menos ml">−</button><span class="num">${D.ml}</span><button type="button" data-act="ml" data-v="1" aria-label="Mais ml">+</button></div></div>
     </div>
+    <label class="field">Data<input class="input" id="drink-data" type="date" value="${todayKey()}" max="${todayKey()}"></label>
     <div class="drink-total"><span>${D.cups} × ${D.ml} ml = ${nf(total)} ml</span><span class="num">≈ ${nf(kcal)} kcal</span></div>
     <button type="button" class="btn block orange" data-act="adddrink">Registrar ${cur.label.toLowerCase()}</button>
   </section>
@@ -841,13 +880,19 @@ async function exportHistory() {
 const ACT = {
   theme: (el) => { S.theme = el.dataset.v; save(); },
   done: (el) => {
-    const k = todayKey(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
+    const k = curDay(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
+    const repl = (d.notes[id] || []).filter((n) => n.type === 'troca' || n.type === 'livre');
+    if (d.done[id] && repl.length) {
+      if (!confirm('Esta refeição tem uma anotação de ' + (repl.some((n) => n.type === 'livre') ? 'refeição livre' : 'troca') + '. Desmarcar também apaga essa anotação. Continuar?')) return;
+      dropReplacements(k, id);
+    }
     d.done[id] = !d.done[id];
+    delete d.byNote[id];
     if (d.done[id] && m) d.snap[id] = snapshot(m, k); else delete d.snap[id];
     save();
   },
   pickopt: (el) => {
-    const k = todayKey(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
+    const k = curDay(); const d = dayRec(k); const id = el.dataset.meal; const m = S.plan.find((x) => x.id === id);
     d.sel[id] = +el.dataset.i;
     if (d.done[id] && m) d.snap[id] = snapshot(m, k);
     save();
@@ -858,28 +903,44 @@ const ACT = {
   notesave: () => {
     const N = UI.note; if (!N) return;
     if (!String(N.text).trim() && !num(N.kcal)) { toast('Escreva o que comeu ou as calorias'); return; }
-    const k = todayKey(); const d = dayRec(k);
+    const k = curDay(); const d = dayRec(k);
     (d.notes[N.meal] = d.notes[N.meal] || []).push({ id: uid(), type: N.type, text: String(N.text).trim(), kcal: num(N.kcal) || '', at: new Date().toISOString() });
-    if (N.meal !== FORA && (N.type === 'troca' || N.type === 'livre')) { d.done[N.meal] = true; delete d.snap[N.meal]; }
+    if (N.meal !== FORA && (N.type === 'troca' || N.type === 'livre')) {
+      if (!d.done[N.meal]) d.byNote[N.meal] = true;
+      d.done[N.meal] = true; delete d.snap[N.meal];
+    }
     if (N.type === 'livre') S.free[weekStart(k)] = k;
     UI.note = null;
     save(); toast('Anotado');
   },
   notedel: (el) => {
-    const k = todayKey(); const d = dayRec(k); const mid = el.dataset.meal;
+    const k = curDay(); const d = dayRec(k); const mid = el.dataset.meal;
+    const gone = (d.notes[mid] || []).find((n) => n.id === el.dataset.id);
     d.notes[mid] = (d.notes[mid] || []).filter((n) => n.id !== el.dataset.id);
+    const stillRepl = d.notes[mid].some((n) => n.type === 'troca' || n.type === 'livre');
     if (!d.notes[mid].length) delete d.notes[mid];
+    if (gone && gone.type === 'livre') releaseFree(k);
+    /* A refeição foi marcada só por causa da anotação: sem ela, volta a não feita */
+    if (gone && (gone.type === 'troca' || gone.type === 'livre') && !stillRepl && d.byNote[mid]) { d.done[mid] = false; delete d.byNote[mid]; delete d.snap[mid]; }
     save();
   },
   exporthist: () => exportHistory(),
-  water: (el) => { const d = dayRec(todayKey()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
+  day: (el) => {
+    const v = +el.dataset.v;
+    UI.day = v === 0 ? todayKey() : addDays(curDay(), v);
+    UI.note = null;
+    render();
+  },
+  water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => { const ws = weekStart(); if (S.free[ws]) delete S.free[ws]; else S.free[ws] = todayKey(); save(); },
   drinktype: (el) => { UI.drink.type = el.dataset.v; UI.drink.ml = DRINKS[el.dataset.v].ml; render(); },
   cups: (el) => { UI.drink.cups = Math.max(1, UI.drink.cups + (+el.dataset.v)); render(); },
   ml: (el) => { const st = DRINKS[UI.drink.type].step; UI.drink.ml = Math.max(st, UI.drink.ml + st * (+el.dataset.v)); render(); },
   adddrink: () => {
     const D = UI.drink;
-    S.drinks.push({ id: uid(), date: todayKey(), type: D.type, cups: D.cups, ml: D.ml, kcal: drinkKcal(D.type, D.cups, D.ml) });
+    const dEl = document.getElementById('drink-data');
+    const date = (dEl && dEl.value && dEl.value <= todayKey()) ? dEl.value : todayKey();
+    S.drinks.push({ id: uid(), date, type: D.type, cups: D.cups, ml: D.ml, kcal: drinkKcal(D.type, D.cups, D.ml) });
     UI.drink.cups = 1;
     save(); toast('Bebida alcoólica registrada');
   },
@@ -956,15 +1017,20 @@ document.getElementById('file-import').addEventListener('change', (e) => {
   e.target.value = '';
   if (f) importFile(f);
 });
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { if (route().name !== 'refeicao' && route().name !== 'hoje' && route().name !== 'macros') UI.day = null; render(); window.scrollTo(0, 0); });
 
 /* Recarrega quando volta para o app em outro dia ou depois de editar em outro aparelho */
 let lastDay = todayKey();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (UI.auth.user) pull();
-  if (todayKey() !== lastDay) { lastDay = todayKey(); render(); }
+  if (todayKey() !== lastDay) { lastDay = todayKey(); UI.day = null; render(); }
 });
+
+const hasStoredSession = () => { try { return Object.keys(localStorage).some((x) => /^sb-.*-auth-token$/.test(x)); } catch (e) { return false; } };
+if (sb && !navigator.onLine && hasStoredSession()) UI.auth.ready = true;
+window.addEventListener('online', () => { if (UI.auth.user) pull(); });
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 render();
 initAuth();

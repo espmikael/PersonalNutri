@@ -12,12 +12,13 @@ Site estático (HTML, CSS e JavaScript puros), publicado pelo GitHub Pages. Não
 | `styles.css` | Visual (temas claro e escuro, layout de celular e PC) |
 | `app.js` | Toda a lógica: telas, plano padrão, cálculos, sincronização, planilha |
 | `config.js` | Nome do app e conexão com o Supabase |
+| `sw.js` | Service worker: deixa o app abrir sem internet |
 | `manifest.webmanifest`, `*.png`, `favicon.svg` | Ícone do prato e instalação na tela de início |
 | `supabase.sql` | Script da tabela e das regras de acesso (rodar no Supabase, não precisa estar no repositório) |
 
 ## Publicar
 
-1. Suba os arquivos na raiz do repositório (não dentro de uma pasta).
+1. Suba os arquivos na raiz do repositório (não dentro de uma pasta), inclusive o `sw.js`.
 2. Em **Settings › Pages**, escolha **Deploy from a branch**, branch `main`, pasta `/ (root)`.
 3. O app fica em `https://espmikael.github.io/PersonalNutri/`.
 
@@ -59,6 +60,16 @@ Colunas (acentos e maiúsculas não importam):
 - Se as colunas Refeição, Horário ou Opção ficarem vazias, o app repete o valor da linha de cima.
 - Números aceitam vírgula ou ponto.
 
+## Dias anteriores
+
+Na tela **Hoje**, as setas ‹ › ao lado da data voltam até 14 dias. Assim dá para revisar e marcar um dia que passou (refeições, anotações e água). Refeição que ficar sem marcação conta como pulada no histórico.
+
+## Sem internet
+
+O `sw.js` guarda uma cópia do app no aparelho. Sem sinal, o app abre normalmente, com a sessão que já estava aberta, e as alterações ficam salvas no aparelho. Quando a internet volta, ele sincroniza.
+
+Ao publicar uma versão nova, o app pega os arquivos novos assim que abrir com internet. Se algo parecer antigo, feche e abra o app de novo.
+
 ## Anotar o que comeu de verdade
 
 Cada refeição na tela **Hoje** tem um botão **+ Anotar**:
@@ -66,6 +77,8 @@ Cada refeição na tela **Hoje** tem um botão **+ Anotar**:
 - **Comi outra coisa**: substitui a refeição do plano (marca como feita).
 - **Comi a mais**: soma em cima do que estava no plano.
 - **Refeição livre**: substitui a refeição e já marca a refeição livre da semana.
+
+Desmarcar uma refeição que tem anotação de troca ou de refeição livre pede confirmação e apaga essa anotação. Apagar a anotação de uma refeição que só estava marcada por causa dela volta a refeição para não feita.
 
 O card **Fora das refeições**, no fim do dia, serve para beliscos. As calorias de uma anotação são opcionais e entram só nas calorias do dia; proteína, carbo e gordura vêm apenas das refeições do plano.
 

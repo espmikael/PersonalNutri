@@ -225,3 +225,9 @@ textarea.input { padding: 10px 12px; min-height: 64px; resize: vertical; }
 
 .water-btns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .water-btns .btn { padding: 0 8px; }
+
+.daynav { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.daynav-btn { width: 32px; height: 32px; border: none; border-radius: 99px; background: transparent; color: var(--pri-text); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.daynav-btn:first-child { margin-left: -8px; }
+.daynav-btn:disabled { color: var(--line); cursor: default; }
+.daynav-today { border: none; background: var(--soft); color: var(--pri-text); border-radius: 99px; font-size: 12px; font-weight: 600; min-height: 28px; padding: 0 10px; margin-left: 4px; }
