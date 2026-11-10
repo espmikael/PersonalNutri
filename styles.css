@@ -222,3 +222,6 @@ textarea.input { padding: 10px 12px; min-height: 64px; resize: vertical; }
 .note .del-btn { background: transparent; color: inherit; width: 40px; height: 40px; flex-shrink: 0; }
 .note-editor { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
 .small-chip { min-height: 40px; font-size: 13px; padding: 0 12px; }
+
+.water-btns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.water-btns .btn { padding: 0 8px; }

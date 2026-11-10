@@ -1,6 +1,6 @@
 # PersonalNutri
 
-App pessoal de dieta: plano alimentar com opções de troca, macros do dia, metas, refeição livre, registro de bebida e acompanhamento de peso e cintura. Funciona no celular e no computador, nos temas claro e escuro, e sincroniza pelo Supabase.
+App pessoal de dieta: plano alimentar com opções de troca, macros do dia, metas, água, refeição livre, registro de bebida alcoólica e acompanhamento de peso e cintura. Funciona no celular e no computador, nos temas claro e escuro, e sincroniza pelo Supabase.
 
 Site estático (HTML, CSS e JavaScript puros), publicado pelo GitHub Pages. Não tem build nem dependência para instalar.
 
@@ -78,7 +78,9 @@ Em **Progresso › Exportar histórico** sai `personalnutri-historico-AAAA-MM-DD
 - **Leia-me**: como cada número foi calculado.
 - **Resumo diário**: uma linha por dia (inclusive dias sem registro), com refeições feitas, kcal do plano, kcal anotadas, kcal de bebida, total, diferença da meta, macros, refeição livre, peso, cintura e anotações.
 - **Refeições**: cada refeição de cada dia, com a opção escolhida, se foi feita, se seguiu o plano e as anotações.
-- **Anotações**, **Bebidas**, **Check-ins**, **Metas** e **Plano atual**.
+- **Anotações**, **Bebidas alcoólicas**, **Check-ins**, **Metas** e **Plano atual**.
+
+A água entra no resumo diário (ml do dia e meta). A meta de água fica em **Macros › Metas** (padrão: 2.700 ml, como no plano da nutricionista).
 
 ## Plano padrão
 

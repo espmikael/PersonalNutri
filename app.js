@@ -38,7 +38,7 @@ function defaultPlan() {
     ] }
   ];
 }
-const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, peso: 81, meta: '', data: '2027-01-19' };
+const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '', data: '2027-01-19' };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
   vinho: { label: 'Vinho', k: 0.85, ml: 150, step: 25 },
@@ -293,6 +293,17 @@ function foraCard(k) {
     ${open ? noteEditor(false) : `<div><button type="button" class="note-btn" data-act="noteopen" data-meal="${FORA}">+ Anotar</button></div>`}
   </div></article>`;
 }
+function waterCard(k) {
+  const ml = num(S.days[k] && S.days[k].water);
+  const goal = num(S.goals.agua);
+  const pct = goal ? Math.min(100, Math.round(ml / goal * 100)) : 0;
+  const L = (v) => (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  return `<section class="card stack" aria-label="Água">
+    <div class="between"><span class="meal-name">Água</span><span class="muted"><span class="num" style="font-size:22px;color:var(--ink)">${L(ml)} L</span>${goal ? ' / ' + L(goal) + ' L' : ''}</span></div>
+    <div class="bar" role="progressbar" aria-label="Água" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div style="width:${pct}%;background:var(--mp)"></div></div>
+    <div class="water-btns"><button type="button" class="btn small ghost" data-act="water" data-v="-250" aria-label="Tirar 250 ml">− 250 ml</button><button type="button" class="btn small" data-act="water" data-v="250">+ 250 ml</button><button type="button" class="btn small" data-act="water" data-v="500">+ 500 ml</button></div>
+  </section>`;
+}
 function viewHoje() {
   const k = todayKey();
   const c = consumed(k);
@@ -312,14 +323,15 @@ function viewHoje() {
   </a>`;
   const side = `<div class="col only-desktop">
     <section class="card stack" aria-label="Macros"><div class="between"><h2 class="label">Consumido hoje</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar plano</a></div>${macroBars(c, g)}</section>
+    ${waterCard(k)}
     <section class="card stack" aria-label="Progresso"><h2 class="label">Progresso</h2>
       <div class="grid2"><div><div class="small muted" style="font-weight:600">Peso</div><div class="num big">${lc ? nf(lc.peso, 1) + ' kg' : '—'}</div></div><div><div class="small muted" style="font-weight:600">Cintura</div><div class="num big">${lc && lc.cintura ? nf(lc.cintura, 1) + ' cm' : '—'}</div></div></div>
       ${weekGrid().html}<a class="small" style="font-weight:600;text-decoration:none" href="#progresso">Fazer check-in</a></section>
-    <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
+    <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
   </div>`;
   const meals = sortedPlan().map((m) => mealCard(m, k)).join('') + (S.plan.length ? foraCard(k) : '');
   return header('Hoje', esc(longDate(k)) + (daysLeft !== null && daysLeft > 0 ? ` · ${daysLeft} dias até ${ddmm(g.data)}` : '')) +
-    `<div class="split"><div class="col"><div class="only-mobile">${summary}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
+    `<div class="split"><div class="col"><div class="only-mobile">${summary}</div><div class="only-mobile">${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
 
 /* ---------- Refeição ---------- */
@@ -359,7 +371,7 @@ function viewMacros() {
       <div class="small muted" style="margin-top:8px">Com as opções escolhidas para hoje.</div></section>
   </div><div class="col">
     <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2><span class="small" style="font-weight:600;color:var(--pri-text)">${days !== null && days > 0 ? days + ' dias até a data alvo' : ''}</span></div>
-      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}${field('Data alvo', 'data', 'date')}</div>
+      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso inicial (kg)', 'peso', 'number', '81', '0.1')}${field('Peso meta (kg)', 'meta', 'number', 'ex.: 76', '0.1')}${field('Data alvo', 'data', 'date')}</div>
       <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso meta.` : 'Peso meta alcançado.') : 'Defina o peso meta para ver quanto falta.'}</div></section>
   </div></div>`;
 }
@@ -378,7 +390,7 @@ function viewExtras() {
   return header('Extras', 'Semana de ' + ddmm(ws) + ' a ' + ddmm(addDays(ws, 6))) + `
   <section class="card row" style="padding:16px 18px" aria-label="Refeição livre"><div style="flex:1"><div class="meal-name">Refeição livre</div><div class="small muted">${free ? 'Usada nesta semana · 1 de 1' : 'Disponível · 0 de 1 nesta semana'}</div></div>
     <button type="button" class="btn small ${free ? 'ghost' : ''}" style="border-radius:99px" data-act="free">${free ? 'Desfazer' : 'Registrar'}</button></section>
-  <section class="card stack" aria-label="Bebida"><div class="meal-name">Bebida</div>
+  <section class="card stack" aria-label="Bebida alcoólica"><div class="meal-name">Bebida alcoólica</div>
     <div class="grid4">${Object.keys(DRINKS).map((id) => `<button type="button" class="chip o ${id === D.type ? 'on' : ''}" style="padding:0 4px;border-radius:12px;font-size:13px" aria-pressed="${id === D.type}" data-act="drinktype" data-v="${id}">${DRINKS[id].label}</button>`).join('')}</div>
     <div class="grid2">
       <div class="field">Copos<div class="stepper"><button type="button" data-act="cups" data-v="-1" aria-label="Menos copos">−</button><span class="num">${D.cups}</span><button type="button" data-act="cups" data-v="1" aria-label="Mais copos">+</button></div></div>
@@ -388,7 +400,7 @@ function viewExtras() {
     <button type="button" class="btn block orange" data-act="adddrink">Registrar ${cur.label.toLowerCase()}</button>
   </section>
   <div class="stack" style="gap:8px"><div class="between label"><span>Nesta semana</span><span>${list.length ? nf(wMl) + ' ml · ≈ ' + nf(wK) + ' kcal' : ''}</span></div>
-    ${list.length ? list.map((d) => `<div class="log-item"><span>${ddmm(d.date)} · ${d.cups} × ${d.ml} ml de ${esc((DRINKS[d.type] || {}).label || d.type).toLowerCase()}</span><span class="row" style="gap:4px"><strong>≈ ${nf(d.kcal)} kcal</strong><button type="button" class="del-btn" data-act="deldrink" data-id="${esc(d.id)}" aria-label="Apagar registro">${I.x}</button></span></div>`).join('') : '<div class="log-item muted" style="padding:14px 16px">Nenhuma bebida registrada</div>'}
+    ${list.length ? list.map((d) => `<div class="log-item"><span>${ddmm(d.date)} · ${d.cups} × ${d.ml} ml de ${esc((DRINKS[d.type] || {}).label || d.type).toLowerCase()}</span><span class="row" style="gap:4px"><strong>≈ ${nf(d.kcal)} kcal</strong><button type="button" class="del-btn" data-act="deldrink" data-id="${esc(d.id)}" aria-label="Apagar registro">${I.x}</button></span></div>`).join('') : '<div class="log-item muted" style="padding:14px 16px">Nenhuma bebida alcoólica registrada</div>'}
   </div>`;
 }
 
@@ -440,7 +452,7 @@ function viewProgresso() {
       ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${e.slice().reverse().map((x) => `<tr><td>${ddmm(x.date)}</td><td><strong>${nf(x.peso, 1)} kg</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
     <section class="card stack" aria-label="Esta semana"><div class="between label"><span>Esta semana</span><span>${wg.done} de ${wg.possible} refeições</span></div>${wg.html}</section>
     <section class="card stack" aria-label="Exportar histórico"><div class="meal-name">Histórico completo</div>
-      <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, as bebidas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
+      <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, a água, as bebidas alcoólicas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
       <button type="button" class="btn small" data-act="exporthist">Exportar histórico</button></section>
   </div></div>`;
 }
@@ -788,10 +800,11 @@ async function exportHistory() {
       const total = kPlano + kAnot + kBeb;
       resumo.push({
         'Data': k, 'Dia': dn, 'Refeições feitas': feitas, 'Refeições no plano': S.plan.length,
-        'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida': Math.round(kBeb), 'kcal total': Math.round(total),
+        'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida alcoólica': Math.round(kBeb), 'kcal total': Math.round(total),
         'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
         'Proteína do plano (g)': Math.round(p), 'Carbo do plano (g)': Math.round(c), 'Gordura do plano (g)': Math.round(gg),
-        'Refeição livre': sim(livre), 'Bebida (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
+        'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
+        'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
         'Peso (kg)': ck ? ck.peso : '', 'Cintura (cm)': ck && ck.cintura ? ck.cintura : '', 'Anotações': textos.join(' | ')
       });
     });
@@ -801,12 +814,13 @@ async function exportHistory() {
       { 'Leia-me': 'kcal do plano: soma das refeições marcadas como feitas, pela opção do plano escolhida no dia. Os macros (proteína, carbo, gordura) só existem para essas refeições.' },
       { 'Leia-me': 'kcal anotadas: estimativas digitadas à mão para trocas, comida a mais, refeição livre e beliscos. Anotação sem kcal fica registrada, mas não soma.' },
       { 'Leia-me': 'Refeição sem marcação (Feita = não) deve ser tratada como pulada: o usuário revisa o dia e marca o que comeu.' },
-      { 'Leia-me': 'kcal de bebida: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
+      { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
+      { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum; cintura na altura do umbigo.' }
     ];
     const metas = [
       { 'Meta': 'Calorias/dia', 'Valor': g.kcal }, { 'Meta': 'Proteína (g)', 'Valor': g.prot }, { 'Meta': 'Carboidrato (g)', 'Valor': g.carb },
-      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }, { 'Meta': 'Data alvo', 'Valor': g.data }
+      { 'Meta': 'Gordura (g)', 'Valor': g.fat }, { 'Meta': 'Água (ml/dia)', 'Valor': g.agua }, { 'Meta': 'Peso inicial (kg)', 'Valor': g.peso }, { 'Meta': 'Peso meta (kg)', 'Valor': g.meta }, { 'Meta': 'Data alvo', 'Valor': g.data }
     ];
     const plano = [];
     S.plan.forEach((m) => m.opts.forEach((o) => o.items.forEach((i) => plano.push({ 'Refeição': m.name, 'Horário': m.time, 'Opção': o.name, 'Alimento': i.food, 'Quantidade': i.qty, 'kcal': num(i.k), 'Proteína (g)': num(i.p), 'Carbo (g)': num(i.c), 'Gordura (g)': num(i.g) }))));
@@ -816,7 +830,7 @@ async function exportHistory() {
     add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 9, 9, 9, 9, 80]);
     add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
     add(anotacoes, 'Anotações', [11, 18, 16, 50, 10]);
-    add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas');
+    add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas alcoólicas');
     add(S.checkins.map((x) => ({ 'Data': x.date, 'Peso (kg)': x.peso, 'Cintura (cm)': x.cintura || '' })), 'Check-ins');
     add(metas, 'Metas', [20, 12]);
     add(plano, 'Plano atual', [16, 8, 28, 32, 18, 6, 12, 10, 12]);
@@ -861,6 +875,7 @@ const ACT = {
     save();
   },
   exporthist: () => exportHistory(),
+  water: (el) => { const d = dayRec(todayKey()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => { const ws = weekStart(); if (S.free[ws]) delete S.free[ws]; else S.free[ws] = todayKey(); save(); },
   drinktype: (el) => { UI.drink.type = el.dataset.v; UI.drink.ml = DRINKS[el.dataset.v].ml; render(); },
   cups: (el) => { UI.drink.cups = Math.max(1, UI.drink.cups + (+el.dataset.v)); render(); },
@@ -869,7 +884,7 @@ const ACT = {
     const D = UI.drink;
     S.drinks.push({ id: uid(), date: todayKey(), type: D.type, cups: D.cups, ml: D.ml, kcal: drinkKcal(D.type, D.cups, D.ml) });
     UI.drink.cups = 1;
-    save(); toast('Bebida registrada');
+    save(); toast('Bebida alcoólica registrada');
   },
   deldrink: (el) => { S.drinks = S.drinks.filter((d) => d.id !== el.dataset.id); save(); },
   checkin: () => {
