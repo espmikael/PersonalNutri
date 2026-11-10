@@ -38,6 +38,8 @@ function defaultPlan() {
     ] }
   ];
 }
+/* Observações do plano (vieram do plano da nutricionista). A refeição livre semanal é fixa e aparece à parte. */
+const DEFAULT_RULES = ['Não pular refeições, mesmo que atrase um pouco.', 'Evitar ultraprocessados.', 'Quando der, preferir alimentos integrais, com mais fibra.'];
 const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '' };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
@@ -47,7 +49,7 @@ const DRINKS = {
 };
 
 function defaultState() {
-  return { v: 1, updatedAt: 0, theme: 'light', plan: defaultPlan(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, drinks: [], checkins: [] };
+  return { v: 1, updatedAt: 0, theme: 'light', plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, drinks: [], checkins: [] };
 }
 function normalizeState(x) {
   const d = defaultState();
@@ -56,6 +58,7 @@ function normalizeState(x) {
     ...d, ...x,
     goals: (({ data, ...rest }) => rest)({ ...d.goals, ...(x.goals || {}) }),
     plan: Array.isArray(x.plan) ? x.plan : d.plan,
+    rules: Array.isArray(x.rules) ? x.rules : d.rules,
     days: x.days || {}, free: x.free || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
@@ -366,6 +369,18 @@ function waterCard(k) {
     <div class="water-btns"><button type="button" class="btn small ghost" data-act="water" data-v="-250" aria-label="Tirar 250 ml">− 250 ml</button><button type="button" class="btn small" data-act="water" data-v="250">+ 250 ml</button><button type="button" class="btn small" data-act="water" data-v="500">+ 500 ml</button></div>
   </section>`;
 }
+function freeStatus() {
+  const used = S.free[weekStart()];
+  return used ? { on: false, text: 'Usada ' + (used === todayKey() ? 'hoje' : DIAS[parseKey(used).getDay()].toLowerCase()) } : { on: true, text: 'Disponível' };
+}
+function rulesCard() {
+  const f = freeStatus();
+  return `<section class="card stack rules" aria-label="Regras do plano">
+    <div class="between"><h2 class="label">Regras do plano</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar</a></div>
+    <a class="rule-free" href="#extras"><span><strong>1 refeição livre por semana</strong><span class="small muted" style="display:block">Para comer algo fora do plano. Registre em Extras ou no “+ Anotar” da refeição.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></a>
+    ${S.rules.length ? `<ul class="rule-list">${S.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
+  </section>`;
+}
 function viewHoje() {
   const k = curDay();
   const isToday = k === todayKey();
@@ -374,7 +389,6 @@ function viewHoje() {
   const pct = num(g.kcal) ? Math.min(100, Math.round(c.k / num(g.kcal) * 100)) : 0;
   const lc = lastCheckin();
   const wd = weekDrinks();
-  const free = !!S.free[weekStart()];
   const summary = `<a class="card stack" href="#macros" style="text-decoration:none;color:var(--ink)">
     <div class="grid2">
       <div><div class="small muted" style="font-weight:500">Calorias</div><div class="num big">${nf(c.k)} <span class="small muted" style="font-weight:500">/ ${nf(g.kcal)}</span></div></div>
@@ -386,14 +400,15 @@ function viewHoje() {
   const side = `<div class="col only-desktop">
     <section class="card stack" aria-label="Macros"><div class="between"><h2 class="label">${isToday ? 'Consumido hoje' : 'Consumido em ' + ddmm(k)}</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar plano</a></div>${macroBars(c, g)}</section>
     ${waterCard(k)}
+    ${rulesCard()}
     <section class="card stack" aria-label="Progresso"><h2 class="label">Progresso</h2>
       <div class="grid2"><div><div class="small muted" style="font-weight:600">Peso</div><div class="num big">${lc ? nf(lc.peso, 1) + ' kg' : '—'}</div></div><div><div class="small muted" style="font-weight:600">Cintura</div><div class="num big">${lastMeasure('cintura') ? nf(lastMeasure('cintura').cintura, 1) + ' cm' : '—'}</div></div></div>
       ${weekGrid().html}<a class="small" style="font-weight:600;text-decoration:none" href="#progresso">Fazer check-in</a></section>
-    <section class="card grid2" aria-label="Extras"><div><div class="small muted" style="font-weight:600">Refeição livre</div><div class="num" style="font-size:22px">${free ? 1 : 0} de 1</div></div><div><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></div></section>
+    <section class="card" aria-label="Bebida alcoólica"><div class="small muted" style="font-weight:600">Bebida alcoólica na semana</div><div class="num" style="font-size:22px;color:var(--o-text)">${nf(wd.reduce((a, d) => a + d.cups * d.ml, 0))} ml</div></section>
   </div>`;
   const meals = sortedPlan().map((m) => mealCard(m, k)).join('') + (S.plan.length ? foraCard(k) : '');
   return header(dayTitle(k), dayNav(k)) + (isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
-    `<div class="split"><div class="col"><div class="only-mobile">${summary}</div><div class="only-mobile">${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
+    `<div class="split"><div class="col"><div class="only-mobile">${summary}</div><div class="only-mobile">${waterCard(k)}</div><div class="only-mobile">${rulesCard()}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
 
 /* ---------- Refeição ---------- */
@@ -569,7 +584,10 @@ function viewPlano() {
     <div class="grid4 plan-tiles" style="gap:10px">${tile('Calorias', t.k, g.kcal, '', 'tot-k')}${tile('Proteína', t.p, g.prot, ' g', 'tot-p')}${tile('Carbo', t.c, g.carb, ' g', 'tot-c')}${tile('Gordura', t.g, g.fat, ' g', 'tot-g')}</div>
     <section class="card stack" aria-label="Planilha" style="gap:10px"><div class="toolbar"><button type="button" class="btn small" data-act="import">Importar planilha</button><button type="button" class="btn small ghost" data-act="export">Exportar planilha</button><button type="button" class="btn small ghost" data-act="reset">Restaurar plano padrão</button></div>
       <div class="small muted">Use a planilha exportada como modelo: colunas Refeição, Horário, Opção, Alimento, Quantidade, kcal, Proteína (g), Carbo (g), Gordura (g) e Dica. Importar substitui o plano atual.</div></section>
-    <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>`;
+    <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>
+    <section class="card stack" aria-label="Regras do plano"><h2 class="label">Regras do plano</h2>
+      <div class="small muted">A refeição livre (1 por semana) é fixa. Escreva aqui as outras observações, uma por linha. Elas aparecem em Hoje.</div>
+      <textarea class="input" rows="4" data-in="rules" aria-label="Regras do plano, uma por linha">${esc(S.rules.join('\n'))}</textarea></section>`;
 }
 function refreshTotals() {
   const t = planDefaultTotals();
@@ -835,6 +853,8 @@ async function importFile(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     const plan = parseRows(rows);
+    const rs = wb.Sheets['Regras'];
+    const rules = rs ? XLSX.utils.sheet_to_json(rs, { header: 1, defval: '' }).slice(1).map((r) => String(r[0] || '').trim()).filter((r) => r && !/refei[cç][aã]o livre por semana/i.test(r)) : null;
     if (!plan.length) { toast('Não encontrei as colunas Refeição e Alimento. Use a planilha exportada como modelo.'); return; }
     const opts = plan.reduce((a, m) => a + m.opts.length, 0);
     const kcal = plan.reduce((a, m) => a + sum(m.opts[0].items).k, 0);
@@ -842,6 +862,7 @@ async function importFile(file) {
     const byName = Object.fromEntries(S.plan.map((m) => [m.name, m.id]));
     plan.forEach((m) => { if (byName[m.name]) m.id = byName[m.name]; });
     S.plan = plan;
+    if (rules) S.rules = rules;
     UI.plano = { meal: 0, opt: {} };
     save();
     toast('Plano importado');
@@ -861,6 +882,9 @@ async function exportPlan() {
     ws['!cols'] = [{ wch: 16 }, { wch: 8 }, { wch: 28 }, { wch: 32 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 60 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plano');
+    const wr = XLSX.utils.json_to_sheet([{ 'Regra': '1 refeição livre por semana (fixa no app)' }].concat(S.rules.map((r) => ({ 'Regra': r }))));
+    wr['!cols'] = [{ wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, wr, 'Regras');
     XLSX.writeFile(wb, 'plano-dieta.xlsx');
   } catch (e) {
     toast(e.message || 'Não consegui gerar a planilha.');
@@ -1057,7 +1081,7 @@ const ACT = {
   delitem: (el) => { const m = S.plan[UI.plano.meal]; const o = m.opts[UI.plano.opt[m.id] || 0]; o.items.splice(+el.dataset.i, 1); save(); },
   import: () => document.getElementById('file-import').click(),
   export: () => exportPlan(),
-  reset: () => { if (!confirm('Trocar o plano atual pelo plano padrão?')) return; S.plan = defaultPlan(); UI.plano = { meal: 0, opt: {} }; save(); toast('Plano padrão restaurado'); },
+  reset: () => { if (!confirm('Trocar o plano atual pelo plano padrão?')) return; S.plan = defaultPlan(); S.rules = DEFAULT_RULES.slice(); UI.plano = { meal: 0, opt: {} }; save(); toast('Plano padrão restaurado'); },
   skipauth: () => { try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* ignore */ } UI.auth.msg = ''; UI.auth.info = ''; location.hash = '#hoje'; render(); },
   logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } markSynced(0); await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
   syncnow: async () => { await pull(); toast(UI.sync || 'Sincronizado'); }
@@ -1081,6 +1105,7 @@ document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.id && el.id.startsWith('auth-')) { UI.auth.f[el.id] = el.value; return; }
   if (el.dataset && el.dataset.in === 'note') { if (UI.note) UI.note[el.dataset.f] = el.value; return; }
+  if (el.dataset && el.dataset.in === 'rules') { S.rules = el.value.split('\n').map((x) => x.trim()).filter(Boolean); save({ render: false }); return; }
   const kind = el.dataset && el.dataset.in;
   if (!kind) return;
   if (kind === 'goal') {
