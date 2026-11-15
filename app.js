@@ -63,6 +63,7 @@ function normalizeState(x) {
     plan: Array.isArray(x.plan) ? x.plan : d.plan,
     rules: Array.isArray(x.rules) ? x.rules : d.rules,
     shop: { ...d.shop, ...(x.shop || {}) },
+    mig: x.mig || {},
     days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
@@ -70,6 +71,23 @@ function normalizeState(x) {
 }
 function loadLocal() {
   try { return normalizeState(JSON.parse(localStorage.getItem(LS_KEY))); } catch (e) { return defaultState(); }
+}
+
+/* Migrações do plano salvo. O plano padrão (defaultPlan) só vale para quem começa do zero;
+   opções novas que entram nele são levadas uma vez para o plano de quem já usa o app.
+   Se a pessoa apagar a opção depois, ela não volta (fica marcado em S.mig). */
+function migratePlan() {
+  S.mig = S.mig || {};
+  let changed = false;
+  if (!S.mig.ovos) {
+    S.mig.ovos = 1;
+    const cafe = S.plan.find((m) => m.id === 'cafe') || S.plan.find((m) => /caf[eé] da manh/i.test(m.name));
+    const ref = defaultPlan()[0].opts.find((o) => o.name === 'Ovos mexidos');
+    if (cafe && ref && !cafe.opts.some((o) => /ovo/i.test(o.name))) { cafe.opts.push(JSON.parse(JSON.stringify(ref))); changed = true; }
+    /* Carimbo só um pouco maior: se outro aparelho editou o plano depois, a edição dele vence e a migração roda de novo sobre ela */
+    S.planU = (S.planU || 0) + 1;
+  }
+  return changed;
 }
 
 /* ---------- Preferências deste aparelho (não sincronizam) ---------- */
@@ -88,6 +106,7 @@ const PREF = {
 };
 if (PREF.shop.days && !S.shopU) { S.shop.days = PREF.shop.days; S.shop.opt = PREF.shop.opt || {}; }
 delete PREF.shop.days; delete PREF.shop.opt;
+if (migratePlan()) { S.updatedAt = Date.now(); try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
 if (lsGet(THEME_KEY, null) === null) lsSet(THEME_KEY, PREF.theme);
 delete S.theme;
 const UI = {
@@ -1017,6 +1036,7 @@ async function pull(depth = 0) {
   if (pending()) {
     /* Os dois aparelhos mudaram: junta parte por parte e envia o resultado */
     S = Core.mergeStates(S, remote);
+    migratePlan();
     S.updatedAt = Date.now();
     try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
     render();
@@ -1027,6 +1047,7 @@ async function pull(depth = 0) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
   markSynced(S.updatedAt);
   setSync('Dados trazidos da nuvem');
+  if (migratePlan()) save({ render: false });
   render();
   scheduleReminders();
 }
