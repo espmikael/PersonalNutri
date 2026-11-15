@@ -1,0 +1,8 @@
+{
+  "name": "personalnutri",
+  "private": true,
+  "description": "App pessoal de plano alimentar. Site estático: não precisa instalar nada para rodar.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

@@ -1,0 +1,270 @@
+/* Lógica pura do PersonalNutri: datas, somas do dia, junção da sincronização, resumos e lista de compras.
+   Não toca no DOM. Funciona no navegador (window.Core) e no Node (require), para os testes. */
+(function (root) {
+  'use strict';
+
+  /* ---------- Números e datas ---------- */
+  const num = (v) => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
+  const pad = (n) => String(n).padStart(2, '0');
+  const keyOf = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const parseKey = (k) => { const [y, m, d] = String(k).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+  const todayKey = () => keyOf(new Date());
+  const addDays = (k, n) => { const d = parseKey(k); d.setDate(d.getDate() + n); return keyOf(d); };
+  const weekStart = (k = todayKey()) => { const d = parseKey(k); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return keyOf(d); };
+  const daysBetween = (a, b) => Math.round((parseKey(b) - parseKey(a)) / 86400000);
+  const ZERO = () => ({ k: 0, p: 0, c: 0, g: 0 });
+  const add = (a, b) => ({ k: a.k + num(b.k), p: a.p + num(b.p), c: a.c + num(b.c), g: a.g + num(b.g) });
+  const sum = (items) => (items || []).reduce(add, ZERO());
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+  /* ---------- Um dia ---------- */
+  const FORA = '_fora';
+  const REPL = (n) => n.type === 'troca' || n.type === 'livre';
+  const notesOf = (s, k, mid) => (s.days[k] && s.days[k].notes && s.days[k].notes[mid]) || [];
+  function optIndex(s, meal, k) {
+    const i = s.days[k] && s.days[k].sel ? s.days[k].sel[meal.id] : 0;
+    return Math.min(Math.max(0, i || 0), Math.max(0, (meal.opts || []).length - 1));
+  }
+  const isDone = (s, meal, k) => !!(s.days[k] && s.days[k].done && s.days[k].done[meal.id]);
+  const sortedPlan = (s) => s.plan.slice().sort((a, b) => String(a.time).localeCompare(String(b.time)));
+  function planned(s, m, k) {
+    const sn = s.days[k] && s.days[k].snap && s.days[k].snap[m.id];
+    if (sn && isDone(s, m, k)) return { name: sn.name, k: sn.k, p: sn.p, c: sn.c, g: sn.g };
+    const o = (m.opts || [])[optIndex(s, m, k)];
+    return o ? { name: o.name, ...sum(o.items) } : { name: sn ? sn.name : '', ...ZERO() };
+  }
+  /* Refeições de um dia: as do plano e as que já saíram do plano mas têm registro nesse dia */
+  function mealsOfDay(s, k) {
+    const list = sortedPlan(s);
+    const d = s.days[k];
+    if (!d) return list;
+    const ids = new Set(list.map((m) => m.id));
+    const extra = new Set([...Object.keys(d.snap || {}), ...Object.keys(d.notes || {}), ...Object.keys(d.done || {}).filter((x) => d.done[x])]);
+    extra.forEach((id) => {
+      if (ids.has(id) || id === FORA) return;
+      const sn = (d.snap || {})[id] || {};
+      list.push({ id, name: sn.meal || 'Refeição removida do plano', time: sn.time || '', opts: [], orphan: true });
+    });
+    return list;
+  }
+  /* O que entrou de uma refeição: o plano (se feita) ou a troca anotada, mais o que foi comido a mais.
+     Anotações guardam kcal e, quando vêm do banco de alimentos ou são digitadas, proteína, carbo e gordura. */
+  function mealIntake(s, m, k) {
+    const ns = notesOf(s, k, m.id);
+    const repl = ns.filter(REPL);
+    const extra = ns.filter((n) => n.type === 'extra');
+    const asMacros = (n) => ({ k: n.kcal, p: n.p, c: n.c, g: n.g });
+    const base = repl.length ? sum(repl.map(asMacros)) : isDone(s, m, k) ? planned(s, m, k) : ZERO();
+    const tot = add(add(ZERO(), base), sum(extra.map(asMacros)));
+    return { ...tot, replaced: repl.length > 0 };
+  }
+  const dayDrinks = (s, k) => (s.drinks || []).filter((d) => d.date === k);
+  /* Tudo o que entrou no dia, inclusive beliscos e bebida alcoólica (só kcal) */
+  function consumed(s, k) {
+    let tot = mealsOfDay(s, k).reduce((a, m) => add(a, mealIntake(s, m, k)), ZERO());
+    tot = add(tot, sum(notesOf(s, k, FORA).map((n) => ({ k: n.kcal, p: n.p, c: n.c, g: n.g }))));
+    const drink = dayDrinks(s, k).reduce((a, d) => a + num(d.kcal), 0);
+    tot.k += drink;
+    tot.drink = drink;
+    return tot;
+  }
+  const doneCount = (s, k) => s.plan.filter((m) => isDone(s, m, k)).length;
+  const water = (s, k) => num(s.days[k] && s.days[k].water);
+  /* Dia com algum registro (para médias não contarem dias esquecidos) */
+  function hasLog(s, k) {
+    const d = s.days[k];
+    if (dayDrinks(s, k).length) return true;
+    if (!d) return false;
+    return Object.values(d.done || {}).some(Boolean) || Object.values(d.notes || {}).some((a) => a && a.length) || num(d.water) > 0;
+  }
+
+  /* ---------- Sincronização ----------
+     Cada parte tem seu carimbo de tempo: planU (plano), rulesU, goalsU, dias (u em cada dia),
+     itens (u em cada bebida e check-in). Apagar deixa uma lápide em tomb, para o item não voltar
+     quando o outro aparelho ainda tem a cópia antiga. */
+  function mergeStates(local, remote) {
+    const out = { ...remote };
+    [['plan', 'planU'], ['rules', 'rulesU'], ['goals', 'goalsU']].forEach(([key, uk]) => {
+      if ((local[uk] || 0) > (remote[uk] || 0)) { out[key] = local[key]; out[uk] = local[uk]; }
+    });
+    out.days = { ...(remote.days || {}) };
+    Object.keys(local.days || {}).forEach((k) => {
+      const l = local.days[k], r = out.days[k];
+      if (!r || (l.u || 0) > (r.u || 0)) out.days[k] = l;
+    });
+    const tomb = { ...(remote.tomb || {}) };
+    Object.entries(local.tomb || {}).forEach(([k, v]) => { if (v > (tomb[k] || 0)) tomb[k] = v; });
+    out.tomb = tomb;
+    const alive = (key, u) => !(tomb[key] && tomb[key] >= (u || 0));
+
+    const byId = new Map();
+    (remote.drinks || []).concat(local.drinks || []).forEach((x) => { const o = byId.get(x.id); if (!o || (x.u || 0) >= (o.u || 0)) byId.set(x.id, x); });
+    out.drinks = [...byId.values()].filter((x) => alive('d:' + x.id, x.u)).sort((x, y) => x.date.localeCompare(y.date));
+
+    const byDate = new Map();
+    (remote.checkins || []).concat(local.checkins || []).forEach((c) => {
+      const o = byDate.get(c.date);
+      if (!o) { byDate.set(c.date, c); return; }
+      const [older, newer] = (c.u || 0) >= (o.u || 0) ? [o, c] : [c, o];
+      byDate.set(c.date, { ...older, ...newer, u: Math.max(o.u || 0, c.u || 0) });
+    });
+    out.checkins = [...byDate.values()].filter((c) => alive('c:' + c.date, c.u)).sort((x, y) => x.date.localeCompare(y.date));
+
+    out.free = {}; out.freeU = {};
+    const lf = local.free || {}, rf = remote.free || {}, lu = local.freeU || {}, ru = remote.freeU || {};
+    new Set([...Object.keys(lf), ...Object.keys(rf)]).forEach((ws) => {
+      const useLocal = ws in lf && (!(ws in rf) || (lu[ws] || 0) > (ru[ws] || 0));
+      const v = useLocal ? lf[ws] : rf[ws];
+      const u = useLocal ? (lu[ws] || 0) : (ru[ws] || 0);
+      if (!alive('f:' + ws, u)) return;
+      out.free[ws] = v; out.freeU[ws] = u;
+    });
+    return out;
+  }
+  /* Lápides com mais de 1 ano já não fazem diferença */
+  function pruneTombs(s, now = Date.now()) {
+    const lim = now - 365 * 86400000;
+    Object.keys(s.tomb || {}).forEach((k) => { if (s.tomb[k] < lim) delete s.tomb[k]; });
+  }
+
+  /* ---------- Resumo da semana ---------- */
+  function weekStats(s, ws, today = todayKey()) {
+    const g = s.goals || {};
+    let days = 0, logged = 0, done = 0, possible = 0, k = 0, p = 0, w = 0, drinkMl = 0, protOk = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(ws, i);
+      if (d > today) break;
+      days++;
+      possible += s.plan.length;
+      done += doneCount(s, d);
+      drinkMl += dayDrinks(s, d).reduce((a, x) => a + num(x.cups) * num(x.ml), 0);
+      if (!hasLog(s, d)) continue;
+      logged++;
+      const c = consumed(s, d);
+      k += c.k; p += c.p; w += water(s, d);
+      if (num(g.prot) && c.p >= num(g.prot) * 0.9) protOk++;
+    }
+    const end = addDays(ws, 7);
+    const wi = (s.checkins || []).filter((c) => num(c.peso));
+    const inWeek = wi.filter((c) => c.date >= ws && c.date < end);
+    const before = wi.filter((c) => c.date < ws);
+    const ref = before.length ? before[before.length - 1] : null;
+    const last = inWeek.length ? inWeek[inWeek.length - 1] : null;
+    return {
+      ws, days, logged, done, possible,
+      adherence: possible ? done / possible : 0,
+      avgK: logged ? k / logged : 0, avgP: logged ? p / logged : 0, avgWater: logged ? w / logged : 0,
+      protOk, drinkMl, free: !!(s.free || {})[ws],
+      weight: last ? num(last.peso) : null,
+      weightDelta: last && ref ? Math.round((num(last.peso) - num(ref.peso)) * 10) / 10 : null
+    };
+  }
+
+  /* ---------- Sequências ----------
+     Dias seguidos cumprindo algo. O dia de hoje só conta se já cumpriu; se não, a sequência vem até ontem. */
+  const TESTS = {
+    prot: (s, k) => num(s.goals.prot) > 0 && consumed(s, k).p >= num(s.goals.prot) * 0.9,
+    agua: (s, k) => num(s.goals.agua) > 0 && water(s, k) >= num(s.goals.agua),
+    plano: (s, k) => s.plan.length > 0 && doneCount(s, k) >= s.plan.length && !s.plan.some((m) => notesOf(s, k, m.id).some(REPL))
+  };
+  function streak(s, kind, today = todayKey()) {
+    const t = TESTS[kind];
+    let k = t(s, today) ? today : addDays(today, -1);
+    let n = 0;
+    while (n < 366 && t(s, k)) { n++; k = addDays(k, -1); }
+    return n;
+  }
+
+  /* ---------- Sugestão de meta ----------
+     Com 3 pesagens em pelo menos 14 dias (últimos 35), compara o ritmo com a adesão ao plano. */
+  function goalHint(s, today = todayKey()) {
+    const from = addDays(today, -35);
+    const w = (s.checkins || []).filter((c) => num(c.peso) && c.date >= from && c.date <= today);
+    if (w.length < 3) return null;
+    const span = daysBetween(w[0].date, w[w.length - 1].date);
+    if (span < 14) return null;
+    const rate = (num(w[w.length - 1].peso) - num(w[0].peso)) / span * 7;
+    let done = 0, possible = 0;
+    for (let k = w[0].date; k <= w[w.length - 1].date; k = addDays(k, 1)) { done += doneCount(s, k); possible += s.plan.length; }
+    const adherence = possible ? done / possible : 0;
+    const r = Math.round(rate * 100) / 100;
+    if (adherence >= 0.8 && rate > -0.2) return { kind: 'down', rate: r, adherence, delta: -150 };
+    if (rate < -1) return { kind: 'up', rate: r, adherence, delta: 150 };
+    if (adherence < 0.8 && rate > -0.2) return { kind: 'adesao', rate: r, adherence, delta: 0 };
+    return null;
+  }
+
+  /* ---------- Gráficos ---------- */
+  /* Média móvel das últimas n pesagens */
+  function movingAvg(vals, n = 3) {
+    return vals.map((_, i) => { const a = vals.slice(Math.max(0, i - n + 1), i + 1); return a.reduce((x, y) => x + y, 0) / a.length; });
+  }
+
+  /* ---------- Lista de compras ---------- */
+  const UNITS = [
+    [/^(g|gr|gramas?)$/, 'g'], [/^kg$/, 'kg'], [/^ml$/, 'ml'], [/^(l|litros?)$/, 'L'],
+    [/^(unidades?|un|und)$/, 'un'], [/^fatias?$/, 'fatia'], [/^doses?$/, 'dose'], [/^conchas?$/, 'concha'],
+    [/^potes?$/, 'pote'], [/^(col\.?|colher(es)?)\s*(de\s*)?sopa$/, 'col. sopa'], [/^(col\.?|colher(es)?)\s*(de\s*)?ch[aá]$/, 'col. chá'],
+    [/^xic(ara)?s?\.?$/, 'xícara']
+  ];
+  /* "1 concha · 86 g" vira 86 g; "1/2 unidade" vira 0,5 un; "à vontade" não tem número */
+  function parseQty(qty) {
+    const parts = String(qty || '').split('·').map((x) => x.trim()).filter(Boolean);
+    const tryPart = (t) => {
+      const m = t.match(/^(\d+\/\d+|\d+(?:[.,]\d+)?)\s*(.*)$/);
+      if (!m) return null;
+      const n = m[1].includes('/') ? m[1].split('/').reduce((a, b) => a / b) : num(m[1]);
+      const raw = norm(m[2]).replace(/\.$/, '');
+      const u = UNITS.find(([re]) => re.test(raw));
+      return { n, unit: u ? u[1] : (raw || 'un') };
+    };
+    const metric = parts.map(tryPart).filter(Boolean).find((x) => ['g', 'kg', 'ml', 'L'].includes(x.unit));
+    const r = metric || (parts.length ? tryPart(parts[0]) : null);
+    if (!r) return null;
+    if (r.unit === 'kg') return { n: r.n * 1000, unit: 'g' };
+    if (r.unit === 'L') return { n: r.n * 1000, unit: 'ml' };
+    return r;
+  }
+  /* pick: id da refeição -> índice da opção. days: quantos dias de compra. */
+  function shoppingList(s, days, pick = {}) {
+    const map = new Map();
+    s.plan.forEach((m) => {
+      const o = (m.opts || [])[Math.min(pick[m.id] || 0, Math.max(0, m.opts.length - 1))];
+      if (!o) return;
+      o.items.forEach((i) => {
+        const name = String(i.food || '').trim();
+        if (!name) return;
+        const q = parseQty(i.qty);
+        const key = norm(name) + '|' + (q ? q.unit : '');
+        const cur = map.get(key) || { food: name, unit: q ? q.unit : '', n: 0, meals: [] };
+        if (q) cur.n += q.n * days;
+        if (!cur.meals.includes(m.name)) cur.meals.push(m.name);
+        map.set(key, cur);
+      });
+    });
+    return [...map.values()].sort((a, b) => a.food.localeCompare(b.food, 'pt-BR'));
+  }
+
+  /* ---------- Banco de alimentos ---------- */
+  function searchFoods(list, q, max = 8) {
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    return list
+      .map((f, i) => ({ f, i, n: norm(f[0]) }))
+      .filter((x) => words.every((w) => x.n.includes(w)))
+      .sort((a, b) => (a.n.startsWith(words[0]) ? 0 : 1) - (b.n.startsWith(words[0]) ? 0 : 1) || a.n.length - b.n.length)
+      .slice(0, max);
+  }
+  /* f = [nome, kcal, prot, carbo, gord (por 100 g ou 100 ml), porção?, gramas da porção?] */
+  const foodMacros = (f, grams) => {
+    const r = num(grams) / 100;
+    return { k: Math.round(f[1] * r), p: Math.round(f[2] * r * 10) / 10, c: Math.round(f[3] * r * 10) / 10, g: Math.round(f[4] * r * 10) / 10 };
+  };
+
+  const api = {
+    num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
+    FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
+    mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, shoppingList, searchFoods, foodMacros
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
+})(typeof self !== 'undefined' ? self : this);

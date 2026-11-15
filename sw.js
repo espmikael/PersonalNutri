@@ -2,14 +2,26 @@
 // Arquivos do próprio app: tenta a rede primeiro (para pegar atualizações) e usa a cópia salva se estiver offline.
 // Fontes e bibliotecas de CDN: usa a cópia salva e atualiza em segundo plano.
 // Chamadas ao Supabase nunca passam pelo cache.
-const VERSION = 'pn-v4';
+// Versão nova fica esperando até o app pedir para ativar (botão "Atualizar"); na primeira instalação ativa direto.
+const VERSION = 'pn-v5';
 const APP_CACHE = VERSION + '-app';
 const CDN_CACHE = VERSION + '-cdn';
-const APP_FILES = ['./', './index.html', './styles.css', './app.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
+const APP_FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './foods.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 const CDN_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdn.sheetjs.com'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)));
+});
+
+self.addEventListener('message', (e) => { if (e.data === 'skip') self.skipWaiting(); });
+
+/* Tocar num lembrete abre o app (ou traz a janela aberta para a frente) */
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const open = list.find((c) => 'focus' in c);
+    return open ? open.focus() : self.clients.openWindow('./#hoje');
+  }));
 });
 
 self.addEventListener('activate', (e) => {
