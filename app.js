@@ -21,6 +21,7 @@ const opcoesAlmoco = () => [
 /* Observações fixas de refeições (aparecem no card em Hoje e se editam em Plano) */
 const NOTE_LANCHE = 'Este lanche já é o pré-treino: coma 1 a 2 horas antes de treinar e não coma mais nada até o treino. O iogurte fica no café da manhã, longe do treino.';
 const NOTE_CEIA = 'Depois da janta, só uma fruta leve: 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Escolha uma, não precisa somar.';
+const NOTE_POS_JANTA = 'Depois da janta, se bater fome: uma fruta leve. 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Se comer, registre em "+ Anotar" › Comi a mais.';
 function defaultPlan() {
   return [
     { id: 'cafe', name: 'Café da manhã', time: '07:00', opts: [
@@ -90,32 +91,40 @@ function migratePlan() {
     /* Carimbo só um pouco maior: se outro aparelho editou o plano depois, a edição dele vence e a migração roda de novo sobre ela */
     S.planU = (S.planU || 0) + 1;
   }
-  if (!S.mig.lanche) {
-    S.mig.lanche = 1;
+  /* Tarde com uma refeição só. Funciona sobre o plano antigo (Pré-treino 15:30 + Lanche 17:00 com iogurte)
+     e sobre o plano que já passou pela primeira versão desta migração (mig.lanche). */
+  if (!S.mig.lanche2) {
+    S.mig.lanche2 = 1;
     const ref = defaultPlan();
-    /* Iogurte de volta no shake do café */
+    const hasIog = (o) => o.items.some((i) => /iogurte/i.test(i.food));
+    /* 1. A refeição de antes do treino vira o Lanche da tarde, às 16h, com a nota */
+    const lanche = S.plan.find((m) => /lanche da tarde/i.test(m.name)) || S.plan.find((m) => /pr[eé].?treino/i.test(m.name)) || S.plan.find((m) => m.id === 'pre');
+    if (lanche) {
+      if (lanche.name !== 'Lanche da tarde') { lanche.name = 'Lanche da tarde'; changed = true; }
+      if (lanche.time !== '16:00') { lanche.time = '16:00'; changed = true; }
+      if (!lanche.note) { lanche.note = NOTE_LANCHE; changed = true; }
+      /* 2. Sai o lanche extra da tarde que só tem iogurte (o iogurte volta para o shake) */
+      const extra = S.plan.filter((m) => m !== lanche && /lanche/i.test(m.name) && m.opts.length && m.opts.every(hasIog));
+      if (extra.length) { S.plan = S.plan.filter((m) => !extra.includes(m)); changed = true; }
+    }
+    /* 3. Iogurte no shake do café */
     const cafe = S.plan.find((m) => m.id === 'cafe') || S.plan.find((m) => /caf[eé] da manh/i.test(m.name));
     const shake = cafe && cafe.opts.find((o) => /shake/i.test(o.name));
-    if (shake && !shake.items.some((i) => /iogurte/i.test(i.food))) {
+    if (shake && !hasIog(shake)) {
       const iog = ref[0].opts[0].items.find((i) => /iogurte/i.test(i.food));
       const at = shake.items.findIndex((i) => /leite/i.test(i.food));
       shake.items.splice(at >= 0 ? at + 1 : shake.items.length, 0, { ...iog });
       if (!/iogurte/i.test(shake.tip || '')) shake.tip = ref[0].opts[0].tip;
       changed = true;
     }
-    /* A refeição das 16h é o Lanche da tarde (e já serve de pré-treino) */
-    const lanche = S.plan.find((m) => /lanche da tarde/i.test(m.name)) || S.plan.find((m) => m.id === 'pre') || S.plan.find((m) => /pr[eé].?treino/i.test(m.name));
-    if (lanche) {
-      if (lanche.name !== 'Lanche da tarde') { lanche.name = 'Lanche da tarde'; changed = true; }
-      if (!lanche.note) { lanche.note = NOTE_LANCHE; changed = true; }
-    }
-    /* Nota com as frutas da ceia */
+    /* 4. Frutas de depois da janta: na Ceia, se existir; se não, como nota no Jantar */
     const ceia = S.plan.find((m) => m.id === 'ceia') || S.plan.find((m) => /ceia/i.test(m.name));
+    const jantar = S.plan.find((m) => m.id === 'jantar') || S.plan.find((m) => /jantar|janta/i.test(m.name));
     if (ceia && !ceia.note) {
       ceia.note = NOTE_CEIA;
       ceia.opts.forEach((o) => { if (/troque à vontade entre as opções/i.test(o.tip || '')) o.tip = ''; });
       changed = true;
-    }
+    } else if (!ceia && jantar && !jantar.note) { jantar.note = NOTE_POS_JANTA; changed = true; }
     S.planU = (S.planU || 0) + 1;
   }
   return changed;
