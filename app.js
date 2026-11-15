@@ -49,8 +49,10 @@ const DRINKS = {
   drink: { label: 'Drink', k: 0.8, ml: 300, step: 50 }
 };
 
+/* Lista de compras: modo auto (pelas opções comidas nas últimas 2 semanas) ou manual; dia da semana das compras (0 = domingo, -1 = sem dia) */
+const DEFAULT_SHOP = { mode: 'auto', day: 6, days: 7, opt: {} };
 function defaultState() {
-  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, planU: 0, rulesU: 0, goalsU: 0 };
+  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, planU: 0, rulesU: 0, goalsU: 0, shop: { ...DEFAULT_SHOP }, shopU: 0 };
 }
 function normalizeState(x) {
   const d = defaultState();
@@ -60,6 +62,7 @@ function normalizeState(x) {
     goals: (({ data, ...rest }) => rest)({ ...d.goals, ...(x.goals || {}) }),
     plan: Array.isArray(x.plan) ? x.plan : d.plan,
     rules: Array.isArray(x.rules) ? x.rules : d.rules,
+    shop: { ...d.shop, ...(x.shop || {}) },
     days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
@@ -81,8 +84,10 @@ let S = loadLocal();
 const PREF = {
   theme: lsGet(THEME_KEY, null) || S.theme || 'auto',
   remind: { on: false, before: 0, water: 0, ...(lsGet(REMIND_KEY, {}) || {}) },
-  shop: { days: 7, opt: {}, got: {}, ...(lsGet(SHOP_KEY, {}) || {}) }
+  shop: { got: {}, ...(lsGet(SHOP_KEY, {}) || {}) }
 };
+if (PREF.shop.days && !S.shopU) { S.shop.days = PREF.shop.days; S.shop.opt = PREF.shop.opt || {}; }
+delete PREF.shop.days; delete PREF.shop.opt;
 if (lsGet(THEME_KEY, null) === null) lsSet(THEME_KEY, PREF.theme);
 delete S.theme;
 const UI = {
@@ -546,6 +551,7 @@ function viewHoje() {
   const lastWeek = monday ? `<section class="card stack" aria-label="Resumo da semana passada"><div class="between"><h2 class="label">Semana passada</h2><a class="small" style="font-weight:600;text-decoration:none" href="#progresso">Ver mais</a></div>${weekSummary(addDays(ws, -7), true)}</section>` : '';
   const wg = weekGrid(ws);
   const side = `<div class="col only-desktop">
+    ${shopTodayCard(k)}
     ${heroCard(k)}
     ${repBtn}
     ${waterCard(k)}
@@ -559,7 +565,7 @@ function viewHoje() {
   const nextId = nextMealId(k);
   const meals = sortedPlan().map((m) => mealCard(m, k, m.id === nextId)).join('') + mealsOfDay(k).filter((m) => m.orphan).map((m) => mealCard(m, k, false)).join('') + (S.plan.length ? foraCard(k) : '');
   return header(dayTitle(k), dayNav(k)) + (isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
-    `<div class="split"><div class="col"><div class="only-mobile col">${heroCard(k)}${repBtn}${waterCard(k)}${lastWeek}${rulesCard(ws)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
+    `<div class="split"><div class="col"><div class="only-mobile col">${shopTodayCard(k)}${heroCard(k)}${repBtn}${waterCard(k)}${lastWeek}${rulesCard(ws)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
 }
 
 /* ---------- Refeição ---------- */
@@ -800,24 +806,54 @@ function fmtQty(n, unit) {
   const plural = n > 1 && ['fatia', 'dose', 'concha', 'pote', 'xícara'].includes(unit) ? unit + 's' : unit;
   return r(n, n % 1 ? 1 : 0) + ' ' + plural;
 }
+function shopMix() {
+  const mix = {};
+  S.plan.forEach((m) => { mix[m.id] = Core.optionMix(S, m, todayKey()); });
+  return mix;
+}
 function shopItems() {
-  const P = PREF.shop;
-  return Core.shoppingList(S, P.days, P.opt);
+  const C = S.shop;
+  return Core.shoppingList(S, C.days, C.opt, C.mode === 'auto' ? shopMix() : null);
 }
 function shopText() {
   return shopItems().map((x) => `- ${x.food}: ${fmtQty(x.n, x.unit)}`).join('\n');
 }
+const DIA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+/* Dia das compras: ajuste em Conta e card em Hoje */
+function shopDayText() {
+  const d = S.shop.day;
+  if (d < 0) return 'sem dia definido';
+  return d === 0 || d === 6 ? 'todo ' + DIAS[d].toLowerCase() : 'toda ' + DIAS[d].toLowerCase() + '-feira';
+}
+function shopTodayCard(k) {
+  if (k !== todayKey() || S.shop.day < 0 || parseKey(k).getDay() !== S.shop.day || PREF.shop.seen === k || !S.plan.length) return '';
+  const n = shopItems().length;
+  return `<section class="card shop-card" aria-label="Lista de compras"><span class="shop-ico">${I.compras}</span><a href="#compras" class="shop-card-main"><span class="meal-name">Dia de compras</span><span class="small muted">Lista da semana pronta: ${n} itens para ${S.shop.days} dias${S.shop.mode === 'auto' ? ', pelo que você tem comido' : ''}.</span></a><button type="button" class="del-btn" data-act="shopseen" aria-label="Esconder até a próxima semana">${I.x}</button></section>`;
+}
 function viewCompras() {
+  const C = S.shop;
   const P = PREF.shop;
+  const auto = C.mode === 'auto';
   const list = shopItems();
   const keyOfItem = (x) => Core.norm(x.food) + '|' + x.unit;
   const got = list.filter((x) => P.got[keyOfItem(x)]).length;
-  const optChips = S.plan.filter((m) => m.opts.length > 1).map((m) => `<div class="stack" style="gap:6px"><span class="field">${esc(m.name)}</span><div class="chips">${m.opts.map((o, i) => `<button type="button" class="chip small-chip ${(P.opt[m.id] || 0) === i ? 'on' : ''}" aria-pressed="${(P.opt[m.id] || 0) === i}" data-act="shopopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(o.name)}</button>`).join('')}</div></div>`).join('');
-  return header('Compras', 'A partir do plano', ['#plano', 'Plano']) + `
-    <section class="card stack" aria-label="Para quantos dias"><div class="between" style="align-items:center"><span class="meal-name">Para quantos dias</span>
-      <div class="stepper" style="min-width:160px"><button type="button" data-act="shopdays" data-v="-1" aria-label="Menos dias">−</button><span class="num">${P.days}</span><button type="button" data-act="shopdays" data-v="1" aria-label="Mais dias">+</button></div></div>
-      ${optChips ? `<details class="more"><summary>Qual opção comprar <span class="muted">· uma por refeição</span></summary><div class="stack" style="margin-top:8px">${optChips}</div></details>` : ''}
-      <div class="small muted">As quantidades somam a opção escolhida de cada refeição × ${P.days} ${P.days === 1 ? 'dia' : 'dias'}. Pesos de alimentos cozidos: compre um pouco mais do cru.</div></section>
+  const multi = S.plan.filter((m) => m.opts.length > 1);
+  const mix = auto ? shopMix() : null;
+  const optInfo = multi.map((m) => {
+    if (auto) {
+      const parts = m.opts.map((o, i) => [o.name, mix[m.id][i]]).filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]);
+      return `<div class="mix-row"><span class="field">${esc(m.name)}</span><span class="small">${parts.map(([n, w]) => `${esc(n)} <strong>${Math.round(w * 100)}%</strong>`).join(' · ')}</span></div>`;
+    }
+    return `<div class="stack" style="gap:6px"><span class="field">${esc(m.name)}</span><div class="chips">${m.opts.map((o, i) => `<button type="button" class="chip small-chip ${(C.opt[m.id] || 0) === i ? 'on' : ''}" aria-pressed="${(C.opt[m.id] || 0) === i}" data-act="shopopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(o.name)}</button>`).join('')}</div></div>`;
+  }).join('');
+  return header('Compras', C.day >= 0 ? 'Compras ' + shopDayText() : 'A partir do plano', ['#plano', 'Plano']) + `
+    <section class="card stack" aria-label="Como montar a lista">
+      <div class="pill" role="group" aria-label="Como escolher as opções" style="align-self:flex-start"><button type="button" data-act="shopmode" data-v="auto" aria-pressed="${auto}">Pelo que você come</button><button type="button" data-act="shopmode" data-v="manual" aria-pressed="${!auto}">Escolher opções</button></div>
+      <div class="small muted">${auto ? 'Soma as opções de cada refeição na proporção em que você escolheu cada uma nas últimas 2 semanas. Sem histórico, usa a 1ª opção.' : 'Escolha uma opção por refeição.'}</div>
+      ${optInfo ? `<details class="more" ${auto ? '' : 'open'}><summary>${auto ? 'Proporção de cada opção' : 'Qual opção comprar'} <span class="muted">· ${multi.length} ${multi.length === 1 ? 'refeição' : 'refeições'}</span></summary><div class="stack" style="margin-top:8px">${optInfo}</div></details>` : ''}
+      <div class="between" style="align-items:center"><span class="meal-name">Para quantos dias</span>
+      <div class="stepper" style="min-width:160px"><button type="button" data-act="shopdays" data-v="-1" aria-label="Menos dias">−</button><span class="num">${C.days}</span><button type="button" data-act="shopdays" data-v="1" aria-label="Mais dias">+</button></div></div>
+      <div class="small muted">Pesos de alimentos cozidos: compre um pouco mais do cru. O dia das compras se ajusta em <a href="#conta">Conta e ajustes</a>.</div></section>
     <section class="card" aria-label="Lista"><div class="between" style="margin-bottom:6px"><h2 class="label">Lista · ${got} de ${list.length}</h2>${got ? '<button type="button" class="link-btn" data-act="shopclear">Desmarcar tudo</button>' : ''}</div>
       ${list.length ? `<ul class="shop">${list.map((x) => { const key = keyOfItem(x); const on = !!P.got[key]; return `<li><button type="button" class="shop-item ${on ? 'on' : ''}" data-act="shopgot" data-k="${esc(key)}" aria-pressed="${on}"><span class="check small ${on ? 'on' : ''}" aria-hidden="true">${on ? I.check : ''}</span><span class="shop-name">${esc(x.food)}<span class="small muted">${esc(x.meals.join(', '))}</span></span><strong class="num">${esc(fmtQty(x.n, x.unit))}</strong></button></li>`; }).join('')}</ul>` : '<div class="small muted">O plano está vazio.</div>'}
     </section>
@@ -830,7 +866,12 @@ function prefsCards() {
   const supported = 'Notification' in window;
   const perm = supported ? Notification.permission : 'unsupported';
   const sel = (act, cur, opts) => `<div class="chips">${opts.map(([v, l]) => `<button type="button" class="chip small-chip ${cur === v ? 'on' : ''}" aria-pressed="${cur === v}" data-act="${act}" data-v="${v}">${l}</button>`).join('')}</div>`;
-  return `<section class="card stack" aria-label="Tema"><div class="meal-name">Tema</div>${themePill()}<div class="small muted">Automático segue o modo claro ou escuro do aparelho.</div></section>
+  const shopDays = [[-1, 'Nenhum']].concat([1, 2, 3, 4, 5, 6, 0].map((d) => [d, DIA_CURTO[d]]));
+  return `<section class="card stack" aria-label="Lista de compras"><div class="between" style="align-items:center"><span class="meal-name">Lista de compras semanal</span><a class="small" style="font-weight:600;text-decoration:none" href="#compras">Ver lista</a></div>
+    <span class="field">Dia das compras</span>${sel('shopday', S.shop.day, shopDays)}
+    <span class="field">Montar a lista</span>${sel('shopmode', S.shop.mode, [['auto', 'Pelo que você come'], ['manual', 'Escolhendo as opções']])}
+    <div class="small muted">No dia das compras, a lista da semana aparece em Hoje${PREF.remind.on ? ' e chega um lembrete às 10h' : ' (e chega um lembrete às 10h, se os lembretes estiverem ligados)'}. Ela usa o plano atual, então muda sozinha quando a dieta muda.</div></section>
+  <section class="card stack" aria-label="Tema"><div class="meal-name">Tema</div>${themePill()}<div class="small muted">Automático segue o modo claro ou escuro do aparelho.</div></section>
   <section class="card stack" aria-label="Lembretes"><div class="between" style="align-items:center"><span class="meal-name">Lembretes</span>
     ${supported && perm !== 'denied' ? `<button type="button" class="btn small ${R.on ? 'ghost' : ''}" data-act="remindtoggle">${R.on ? 'Desligar' : 'Ligar'}</button>` : ''}</div>
     ${!supported ? '<div class="small muted">Este navegador não mostra notificações. No iPhone, instale o app na tela de início (Compartilhar › Adicionar à Tela de Início) e abra por lá.</div>'
@@ -1314,6 +1355,10 @@ function scheduleReminders() {
       }, ms));
     }
   }
+  if (S.shop.day >= 0 && now.getDay() === S.shop.day && S.plan.length) {
+    const ms = at('10:00') - now;
+    if (ms > 0) remindTimers.push(setTimeout(() => notify('Dia de compras', `Lista da semana pronta: ${shopItems().length} itens. Toque para abrir.`, 'compras'), ms));
+  }
   /* Na virada do dia, agenda de novo */
   const midnight = new Date(now); midnight.setHours(24, 0, 5, 0);
   remindTimers.push(setTimeout(scheduleReminders, midnight - now));
@@ -1516,12 +1561,15 @@ const ACT = {
   export: () => exportPlan(),
   reset: async () => { if (!(await ask('Trocar o plano atual pelo plano padrão?', { ok: 'Restaurar', danger: true }))) return; S.plan = defaultPlan(); S.rules = DEFAULT_RULES.slice(); UI.plano = { meal: 0, opt: {} }; save({ touch: ['plan', 'rules'] }); toast('Plano padrão restaurado'); },
   /* Compras */
-  shopdays: (el) => { PREF.shop.days = Math.min(31, Math.max(1, PREF.shop.days + (+el.dataset.v))); lsSet(SHOP_KEY, PREF.shop); render(); },
-  shopopt: (el) => { PREF.shop.opt[el.dataset.meal] = +el.dataset.i; lsSet(SHOP_KEY, PREF.shop); render(); },
+  shopdays: (el) => { S.shop.days = Math.min(31, Math.max(1, S.shop.days + (+el.dataset.v))); save({ touch: 'shop' }); },
+  shopopt: (el) => { S.shop.opt = { ...S.shop.opt, [el.dataset.meal]: +el.dataset.i }; save({ touch: 'shop' }); },
+  shopmode: (el) => { S.shop.mode = el.dataset.v; save({ touch: 'shop' }); },
+  shopday: (el) => { S.shop.day = +el.dataset.v; save({ touch: 'shop' }); scheduleReminders(); },
+  shopseen: () => { PREF.shop.seen = todayKey(); lsSet(SHOP_KEY, PREF.shop); render(); },
   shopgot: (el) => { const k = el.dataset.k; if (PREF.shop.got[k]) delete PREF.shop.got[k]; else PREF.shop.got[k] = 1; lsSet(SHOP_KEY, PREF.shop); render(); },
   shopclear: () => { PREF.shop.got = {}; lsSet(SHOP_KEY, PREF.shop); render(); },
   shopshare: async () => {
-    const text = 'Lista de compras (' + PREF.shop.days + ' dias)\n' + shopText();
+    const text = 'Lista de compras (' + S.shop.days + ' dias)\n' + shopText();
     try {
       if (navigator.share) await navigator.share({ title: 'Lista de compras', text });
       else { await navigator.clipboard.writeText(text); toast('Lista copiada'); }

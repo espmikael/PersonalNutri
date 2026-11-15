@@ -84,7 +84,7 @@
      quando o outro aparelho ainda tem a cópia antiga. */
   function mergeStates(local, remote) {
     const out = { ...remote };
-    [['plan', 'planU'], ['rules', 'rulesU'], ['goals', 'goalsU']].forEach(([key, uk]) => {
+    [['plan', 'planU'], ['rules', 'rulesU'], ['goals', 'goalsU'], ['shop', 'shopU']].forEach(([key, uk]) => {
       if ((local[uk] || 0) > (remote[uk] || 0)) { out[key] = local[key]; out[uk] = local[uk]; }
     });
     out.days = { ...(remote.days || {}) };
@@ -225,23 +225,45 @@
     if (r.unit === 'L') return { n: r.n * 1000, unit: 'ml' };
     return r;
   }
-  /* pick: id da refeição -> índice da opção. days: quantos dias de compra. */
-  function shoppingList(s, days, pick = {}) {
+  /* Proporção de cada opção de uma refeição nos dias em que ela foi feita (últimos `back` dias, sem contar hoje).
+     Sem histórico, tudo na 1ª opção. Ex.: almoço com feijão em 7 de 10 dias e massa em 3 -> [0.7, 0, 0.3, 0, 0]. */
+  function optionMix(s, meal, today = todayKey(), back = 14) {
+    const n = (meal.opts || []).length;
+    const count = new Array(n).fill(0);
+    let total = 0;
+    for (let i = 1; i <= back; i++) {
+      const k = addDays(today, -i);
+      if (!isDone(s, meal, k) || notesOf(s, k, meal.id).some(REPL)) continue;
+      count[optIndex(s, meal, k)]++;
+      total++;
+    }
+    if (!total) return count.map((_, i) => (i === 0 ? 1 : 0));
+    return count.map((c) => c / total);
+  }
+  /* days: quantos dias de compra. pick: id da refeição -> índice da opção (escolha manual).
+     mix: id da refeição -> proporções das opções (modo automático); quando existe, vale no lugar de pick. */
+  function shoppingList(s, days, pick = {}, mix = null) {
     const map = new Map();
     s.plan.forEach((m) => {
-      const o = (m.opts || [])[Math.min(pick[m.id] || 0, Math.max(0, m.opts.length - 1))];
-      if (!o) return;
-      o.items.forEach((i) => {
-        const name = String(i.food || '').trim();
-        if (!name) return;
-        const q = parseQty(i.qty);
-        const key = norm(name) + '|' + (q ? q.unit : '');
-        const cur = map.get(key) || { food: name, unit: q ? q.unit : '', n: 0, meals: [] };
-        if (q) cur.n += q.n * days;
-        if (!cur.meals.includes(m.name)) cur.meals.push(m.name);
-        map.set(key, cur);
+      const opts = m.opts || [];
+      if (!opts.length) return;
+      const w = mix && mix[m.id] ? mix[m.id] : opts.map((_, i) => (i === Math.min(pick[m.id] || 0, opts.length - 1) ? 1 : 0));
+      opts.forEach((o, oi) => {
+        if (!w[oi]) return;
+        o.items.forEach((i) => {
+          const name = String(i.food || '').trim();
+          if (!name) return;
+          const q = parseQty(i.qty);
+          const key = norm(name) + '|' + (q ? q.unit : '');
+          const cur = map.get(key) || { food: name, unit: q ? q.unit : '', n: 0, meals: [] };
+          if (q) cur.n += q.n * days * w[oi];
+          if (!cur.meals.includes(m.name)) cur.meals.push(m.name);
+          map.set(key, cur);
+        });
       });
     });
+    /* Unidades inteiras (ovo, fatia, dose) arredondam para cima: não dá para comprar 4,2 ovos */
+    map.forEach((x) => { if (x.unit && x.unit !== 'g' && x.unit !== 'ml') x.n = Math.ceil(x.n - 1e-9); else x.n = Math.round(x.n); });
     return [...map.values()].sort((a, b) => a.food.localeCompare(b.food, 'pt-BR'));
   }
 
@@ -264,7 +286,7 @@
   const api = {
     num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
     FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
-    mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, shoppingList, searchFoods, foodMacros
+    mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(typeof self !== 'undefined' ? self : this);

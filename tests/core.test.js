@@ -149,3 +149,22 @@ test('banco de alimentos: busca sem acento e calcula pela quantidade', () => {
 test('média móvel das últimas 3', () => {
   assert.deepEqual(C.movingAvg([3, 6, 9, 12]), [3, 4.5, 6, 9]);
 });
+
+test('lista automática segue a proporção das opções comidas nas últimas 2 semanas', () => {
+  const s = base();
+  s.plan = [{ id: 'a', name: 'Almoço', time: '12:00', opts: [
+    { name: 'Feijão', items: [{ food: 'Arroz', qty: '100 g' }, { food: 'Feijão', qty: '80 g' }] },
+    { name: 'Massa', items: [{ food: 'Macarrão', qty: '140 g' }, { food: 'Ovos', qty: '1 unidade' }] }
+  ] }];
+  // 3 dias com feijão, 1 com massa, 1 trocado por anotação (não conta)
+  [[1, 0], [2, 0], [3, 0], [4, 1]].forEach(([d, o]) => { s.days[C.addDays(D, -d)] = { done: { a: true }, sel: { a: o } }; });
+  s.days[C.addDays(D, -5)] = { done: { a: true }, sel: { a: 1 }, notes: { a: [{ type: 'troca', kcal: 900 }] } };
+  const mix = C.optionMix(s, s.plan[0], D);
+  assert.deepEqual(mix, [0.75, 0.25]);
+  const l = C.shoppingList(s, 7, {}, { a: mix });
+  assert.equal(l.find((x) => x.food === 'Arroz').n, 525);
+  assert.equal(l.find((x) => x.food === 'Macarrão').n, 245);
+  assert.equal(l.find((x) => x.food === 'Ovos').n, 2); // 1,75 arredonda para cima
+  // Sem histórico, tudo na 1ª opção
+  assert.deepEqual(C.optionMix(base({ plan: s.plan }), s.plan[0], D), [1, 0]);
+});

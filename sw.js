@@ -3,7 +3,7 @@
 // Fontes e bibliotecas de CDN: usa a cópia salva e atualiza em segundo plano.
 // Chamadas ao Supabase nunca passam pelo cache.
 // Versão nova fica esperando até o app pedir para ativar (botão "Atualizar"); na primeira instalação ativa direto.
-const VERSION = 'pn-v5';
+const VERSION = 'pn-v6';
 const APP_CACHE = VERSION + '-app';
 const CDN_CACHE = VERSION + '-cdn';
 const APP_FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './foods.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
@@ -19,8 +19,10 @@ self.addEventListener('message', (e) => { if (e.data === 'skip') self.skipWaitin
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const url = e.notification.tag === 'compras' ? './#compras' : './#hoje';
     const open = list.find((c) => 'focus' in c);
-    return open ? open.focus() : self.clients.openWindow('./#hoje');
+    if (!open) return self.clients.openWindow(url);
+    return open.focus().then((c) => (e.notification.tag === 'compras' && c.navigate ? c.navigate(url) : c));
   }));
 });
 
