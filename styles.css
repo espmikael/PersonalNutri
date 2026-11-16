@@ -358,16 +358,6 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .mix-row:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* Observação fixa da refeição */
-.meal-note { background: var(--soft); color: var(--pri-text); border-radius: 12px; font-size: 13px; line-height: 1.45; }
-.meal-note summary { display: flex; gap: 8px; align-items: center; padding: 8px 12px; min-height: 36px; cursor: pointer; list-style: none; }
-.meal-note summary::-webkit-details-marker { display: none; }
-.meal-note summary svg { flex-shrink: 0; }
-.meal-note summary span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meal-note summary::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translate(-2px, -2px); opacity: .7; transition: transform .15s; }
-.meal-note[open] summary { align-items: flex-start; padding: 10px 12px; }
-.meal-note[open] summary svg { margin-top: 1px; }
-.meal-note[open] summary span { white-space: normal; }
-.meal-note[open] summary::after { transform: rotate(-135deg) translate(-2px, -2px); margin-top: 6px; }
 
 /* Ajustes de interface */
 .tap-link { display: inline-block; padding: 12px 6px; margin: -12px -6px; font-weight: 600; }
