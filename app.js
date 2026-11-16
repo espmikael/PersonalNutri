@@ -322,13 +322,13 @@ const I = {
 };
 
 /* ---------- Estrutura ---------- */
-const TABS = [['hoje', 'Hoje'], ['macros', 'Macros'], ['extras', 'Extras'], ['progresso', 'Progresso'], ['plano', 'Plano']];
+const TABS = [['hoje', 'Hoje'], ['progresso', 'Progresso'], ['plano', 'Plano'], ['compras', 'Compras'], ['extras', 'Extras']];
 const SIDE = [['hoje', 'Hoje'], ['macros', 'Macros'], ['progresso', 'Progresso'], ['extras', 'Extras'], ['plano', 'Plano'], ['compras', 'Compras']];
 function route() {
   const h = (location.hash || '#hoje').slice(1).split('/');
   return { name: h[0] || 'hoje', arg: h[1] ? decodeURIComponent(h[1]) : '' };
 }
-function navKey(r) { return r.name === 'refeicao' ? 'hoje' : r.name === 'compras' ? (matchMedia('(min-width: 900px)').matches ? 'compras' : 'plano') : r.name; }
+function navKey(r) { return r.name === 'refeicao' ? 'hoje' : r.name === 'macros' ? (matchMedia('(min-width: 900px)').matches ? 'macros' : 'hoje') : r.name; }
 
 /* Tema: automático (segue o sistema), claro ou escuro. Fica só neste aparelho. */
 const darkMQ = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : { matches: false, addEventListener() {} };
@@ -522,7 +522,7 @@ function mealCard(m, k, next) {
     return `<article class="card meal is-done">
       <div class="meal-main">
         <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span><span class="meal-macro">${nf(it.k)} kcal</span></div>
-        <div class="meal-items">${repl ? 'Trocada pela anotação' : esc(planned(m, k).name || 'Feita')}${m.opts.length ? ` · <a href="#refeicao/${encodeURIComponent(m.id)}">detalhes</a>` : ''}</div>
+        <div class="meal-items">${repl ? 'Trocada pela anotação' : esc(planned(m, k).name || 'Feita')}${m.opts.length ? ` · <a class="tap-link" href="#refeicao/${encodeURIComponent(m.id)}">detalhes</a>` : ''}</div>
         ${notesList(k, m.id)}
         <div><button type="button" class="note-btn" data-act="noteopen" data-meal="${esc(m.id)}" aria-label="Anotar o que comeu em ${esc(m.name)}">+ Anotar</button></div>
       </div>${check}</article>`;
@@ -625,7 +625,7 @@ function viewHoje() {
   const nextId = nextMealId(k);
   const meals = sortedPlan().map((m) => mealCard(m, k, m.id === nextId)).join('') + mealsOfDay(k).filter((m) => m.orphan).map((m) => mealCard(m, k, false)).join('') + (S.plan.length ? foraCard(k) : '');
   return header(dayTitle(k), dayNav(k)) + (isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
-    `<div class="split"><div class="col"><div class="only-mobile col">${shopTodayCard(k)}${heroCard(k)}${repBtn}${waterCard(k)}${lastWeek}${rulesCard(ws)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}</div>${side}</div>`;
+    `<div class="split"><div class="col"><div class="only-mobile col">${shopTodayCard(k)}${heroCard(k)}${repBtn}${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}<div class="only-mobile col">${lastWeek}${rulesCard(ws)}</div></div>${side}</div>`;
 }
 
 /* ---------- Refeição ---------- */
@@ -652,11 +652,7 @@ function viewMacros() {
   const g = S.goals;
   const rows = sortedPlan().map((m) => { const x = planned(m, k); return { name: m.name + (m.opts.length > 1 && x.name ? ` · ${x.name}` : ''), k: x.k, p: x.p, c: x.c, g: x.g }; });
   const tot = rows.reduce((a, r) => ({ k: a.k + r.k, p: a.p + r.p, c: a.c + r.c, g: a.g + r.g }), { k: 0, p: 0, c: 0, g: 0 });
-  const lc = lastCheckin();
-  const pesoAtual = lc ? lc.peso : num(g.peso);
-  const falta = num(g.meta) && pesoAtual ? Math.round((pesoAtual - num(g.meta)) * 10) / 10 : null;
-  const field = (label, key, type = 'number', ph = '', step = 'any') => `<label class="field">${label}<input class="input strong" type="${type}" ${type === 'number' ? `inputmode="decimal" step="${step}"` : ''} data-in="goal" data-k="${key}" value="${esc(g[key])}" placeholder="${esc(ph)}"></label>`;
-  return header('Macros', dayNav(k)) + `<div class="split"><div class="col">
+  return header('Macros', dayNav(k), matchMedia('(min-width: 900px)').matches ? null : ['#hoje', 'Hoje']) + `<div class="split"><div class="col">
     <section class="card stack" aria-label="Consumido"><h2 class="label">${k === todayKey() ? 'Consumido hoje' : 'Consumido em ' + ddmm(k)}</h2>${macroBars(consumed(k), g)}</section>
     <section class="card" aria-label="Plano do dia"><div class="between" style="align-items:center;margin-bottom:6px"><h2 class="label">Plano do dia</h2><a class="small" style="font-weight:600;text-decoration:none;min-height:44px;display:inline-flex;align-items:center" href="#plano">Editar plano</a></div>
       <table class="table"><thead><tr><th>Refeição</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead>
@@ -664,10 +660,19 @@ function viewMacros() {
       <tfoot><tr><td>Total</td><td>${nf(tot.k)}</td><td>${nf(tot.p)}</td><td>${nf(tot.c)}</td><td>${nf(tot.g)}</td></tr></tfoot></table>
       <div class="small muted" style="margin-top:8px">Com as opções escolhidas para ${k === todayKey() ? 'hoje' : ddmm(k)}.</div></section>
   </div><div class="col">
-    <section class="card stack" aria-label="Metas"><div class="between"><h2 class="label">Metas</h2></div>
-      <div class="grid2">${field('Calorias/dia', 'kcal', 'number', '1860', '1')}${field('Proteína (g)', 'prot', 'number', '175', '1')}${field('Carboidrato (g)', 'carb', 'number', '205', '1')}${field('Gordura (g)', 'fat', 'number', '40', '1')}${field('Água/dia (ml)', 'agua', 'number', '2700', '50')}${field('Peso de referência (kg)', 'meta', 'number', 'ex.: 76', '0.1')}</div>
-      <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso de referência.` : 'Peso de referência alcançado.') : 'O peso meta é só referência. A cintura e as medidas, em Progresso, mostram melhor a perda de gordura.'}</div></section>
+    <section class="card stack" aria-label="Metas"><div class="between" style="align-items:center"><h2 class="label">Metas</h2><a class="small" style="font-weight:600;text-decoration:none;min-height:44px;display:inline-flex;align-items:center" href="#plano">Editar metas</a></div>
+      <div class="small muted">${nf(g.kcal)} kcal · ${nf(g.prot)} g de proteína · ${nf(g.carb)} g de carbo · ${nf(g.fat)} g de gordura · ${nf(num(g.agua) / 1000, 1)} L de água</div></section>
   </div></div>`;
+}
+function goalsCard() {
+  const g = S.goals;
+  const lc = lastCheckin();
+  const pesoAtual = lc ? lc.peso : num(g.peso);
+  const falta = num(g.meta) && pesoAtual ? Math.round((pesoAtual - num(g.meta)) * 10) / 10 : null;
+  const field = (label, key, ph, step) => `<label class="field">${label}<input class="input strong" type="number" inputmode="decimal" step="${step}" data-in="goal" data-k="${key}" value="${esc(g[key])}" placeholder="${esc(ph)}"></label>`;
+  return `<section class="card stack" aria-label="Metas"><h2 class="label">Metas</h2>
+      <div class="grid2 goals-grid">${field('Calorias/dia', 'kcal', '1860', '1')}${field('Proteína (g)', 'prot', '175', '1')}${field('Carboidrato (g)', 'carb', '205', '1')}${field('Gordura (g)', 'fat', '40', '1')}${field('Água/dia (ml)', 'agua', '2700', '50')}${field('Peso de referência (kg)', 'meta', 'ex.: 76', '0.1')}</div>
+      <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso de referência.` : 'Peso de referência alcançado.') : 'O peso meta é só referência. A cintura e as medidas, em Progresso, mostram melhor a perda de gordura.'}</div></section>`;
 }
 
 /* ---------- Extras ---------- */
@@ -691,7 +696,7 @@ function viewExtras() {
       <div class="field">ml por copo<div class="stepper"><button type="button" data-act="ml" data-v="-1" aria-label="Menos ml">−</button><span class="num">${D.ml}</span><button type="button" data-act="ml" data-v="1" aria-label="Mais ml">+</button></div></div>
     </div>
     <label class="field">Data<input class="input" id="drink-data" type="date" value="${todayKey()}" max="${todayKey()}"></label>
-    <div class="drink-total"><span>${D.cups} × ${D.ml} ml = ${nf(total)} ml</span><span class="num">≈ ${nf(kcal)} kcal</span></div>
+    <div class="drink-total"><span>Prévia · ${D.cups} × ${D.ml} ml = ${nf(total)} ml</span><span class="num">≈ ${nf(kcal)} kcal</span></div>
     <button type="button" class="btn block orange" data-act="adddrink">Registrar ${cur.label.toLowerCase()}</button>
   </section>
   <div class="stack" style="gap:8px"><div class="between label"><span>Nesta semana</span><span>${list.length ? nf(wMl) + ' ml · ≈ ' + nf(wK) + ' kcal' : ''}</span></div>
@@ -714,7 +719,9 @@ function lineChart(id, pts, opt) {
   const all = vals.concat(planEnd !== null ? [planEnd] : [], o.ref ? [o.ref] : []);
   let lo = Math.floor(Math.min(...all) - 0.5), hi = Math.ceil(Math.max(...all) + 0.5);
   if (hi - lo < 4) { lo -= 1; hi += 1; }
-  const W = 320, H = 190, L = 30, R = 12, T = 22, B = 26;
+  const wide = window.matchMedia && matchMedia('(min-width: 900px)').matches;
+  const W = wide ? 640 : 320, H = wide ? 240 : 190, L = 30, R = 12, T = 22, B = 26;
+  const dot = pts.length > 10 ? 3 : 4.5;
   const X = (k) => L + (daysBetween(start, k) / span) * (W - L - R);
   const Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
   const mid = Math.round((hi + lo) / 2);
@@ -727,9 +734,9 @@ function lineChart(id, pts, opt) {
   const sel = UI.pt && UI.pt.c === id ? UI.pt.i : -1;
   const label = sel >= 0 && pts[sel] ? (() => { const x = X(pts[sel].date), y = Y(pts[sel].v); const txt = `${ddmm(pts[sel].date)} · ${nf(pts[sel].v, 1)} ${o.unit}`; const w = txt.length * 5.6 + 14; const lx = Math.min(W - R - w, Math.max(L, x - w / 2)); return `<g class="pt-label"><rect x="${lx.toFixed(1)}" y="${Math.max(0, y - 30).toFixed(1)}" width="${w.toFixed(1)}" height="20" rx="6" fill="var(--ink)"/><text x="${(lx + w / 2).toFixed(1)}" y="${Math.max(0, y - 30) + 14}" font-size="11" font-weight="600" fill="var(--bg)" text-anchor="middle">${txt}</text></g>`; })() : '';
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">${grid}${ref}${plan}
-    ${pts.length > 2 ? `<path d="${line(avg)}" stroke="var(--mp)" stroke-width="2" stroke-opacity=".45" fill="none" stroke-linecap="round"/>` : ''}
+    ${pts.length > 2 ? `<path d="${line(avg)}" stroke="var(--mp)" stroke-width="1.5" stroke-opacity=".5" fill="none" stroke-linecap="round"/>` : ''}
     <path d="${line(vals)}" stroke="var(--pri)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    ${pts.map((x, i) => `<circle cx="${X(x.date).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${i === sel ? 6 : 4.5}" fill="var(--pri)" stroke="var(--card)" stroke-width="2"/><circle class="hit" cx="${X(x.date).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="14" fill="transparent" data-act="pt" data-c="${id}" data-i="${i}" role="button" tabindex="0" aria-label="${ddmm(x.date)}: ${nf(x.v, 1)} ${o.unit}"/>`).join('')}
+    ${pts.map((x, i) => `<circle cx="${X(x.date).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${i === sel ? 6 : dot}" fill="var(--pri)" stroke="var(--card)" stroke-width="${dot < 4 ? 1.5 : 2}"/><circle class="hit" cx="${X(x.date).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="14" fill="transparent" data-act="pt" data-c="${id}" data-i="${i}" role="button" tabindex="0" aria-label="${ddmm(x.date)}: ${nf(x.v, 1)} ${o.unit}"/>`).join('')}
     ${xl}${label}</svg>`;
 }
 function hintCard() {
@@ -785,12 +792,17 @@ function viewProgresso() {
       <details class="more"><summary>Outras medidas <span class="muted">· a cada 2 a 4 semanas</span></summary>
         <div class="grid2" style="margin-top:12px">${MEDIDAS.slice(1).map(mIn).join('')}</div>
       </details>
+      <details class="more"><summary>Como medir</summary>
+        <div class="small muted" style="margin-bottom:4px">De manhã, em jejum e antes de treinar. Fita rente à pele, sem apertar, paralela ao chão. Sempre o mesmo lado. Meça duas vezes e anote a média.</div>
+        ${MEDIDAS.map((m) => `<details class="how"><summary>${m.label}</summary><div class="small">${m.how}</div></details>`).join('')}
+      </details>
       ${canPhoto ? `<label class="field">Foto (opcional)<span class="file-btn">${I.camera}<span id="ck-foto-name">Escolher foto</span><input id="ck-foto" type="file" accept="image/*" data-in="photo"></span></label>` : ''}
       <label class="field">Data<input class="input" id="ck-data" type="date" value="${k}" max="${k}"></label>
       <button type="button" class="btn block" data-act="checkin">Registrar check-in</button></section>
     <section class="card stack chart" aria-label="Gráfico do peso"><div class="between"><h2 class="label">Peso</h2><span class="muted small">${lc ? `<span class="num" style="font-size:22px;color:var(--ink)">${nf(lc.peso, 1)}</span> kg${diff !== null ? ' · ' + (diff > 0 ? '+' : '') + nf(diff, 1) + ' kg' : ''}` : ''}</span></div>
       ${lineChart('peso', w.map((x) => ({ date: x.date, v: num(x.peso) })), { unit: 'kg', rate: -0.5, ref: num(g.meta), ahead: 28, minSpan: 56, empty: 'Faça o primeiro check-in para ver o gráfico.', aria: 'Peso por check-in, com o ritmo planejado de meio quilo por semana' })}
-      <div class="small muted">Toque num ponto para ver o valor. Azul claro: média das últimas 3 pesagens. Tracejado cinza: ritmo de 0,5 kg por semana${num(g.meta) ? '. Pontilhado verde: peso de referência' : ''}.</div></section>
+      ${w.length ? `<ul class="legend" aria-label="Legenda"><li><span class="lg lg-real"></span>Pesagens</li>${w.length > 2 ? '<li><span class="lg lg-avg"></span>Média de 3 pesagens</li>' : ''}<li><span class="lg lg-plan"></span>Ritmo de 0,5 kg/semana</li>${num(g.meta) ? '<li><span class="lg lg-ref"></span>Peso de referência</li>' : ''}</ul>
+      <div class="small muted">Toque num ponto para ver o valor.</div>` : ''}</section>
     ${waist.length ? `<section class="card stack chart" aria-label="Gráfico da cintura"><div class="between"><h2 class="label">Cintura</h2><span class="muted small"><span class="num" style="font-size:22px;color:var(--ink)">${nf(waist[waist.length - 1].cintura, 1)}</span> cm${wDiff !== null ? ' · ' + (wDiff > 0 ? '+' : '') + nf(wDiff, 1) + ' cm' : ''}</span></div>
       ${lineChart('cintura', waist.map((x) => ({ date: x.date, v: num(x.cintura) })), { unit: 'cm', aria: 'Cintura por check-in' })}</section>` : ''}
   </div><div class="col">
@@ -798,11 +810,8 @@ function viewProgresso() {
     ${evol.length ? `<section class="card" aria-label="Medidas"><h2 class="label" style="margin-bottom:6px">Medidas (cm)</h2>
       <table class="table"><thead><tr><th>Medida</th><th>Primeira</th><th>Última</th><th>Variação</th></tr></thead><tbody>${evol.join('')}</tbody></table>
       <div class="small muted" style="margin-top:8px">Cintura caindo com peito, braço e coxa mantidos ou subindo é perda de gordura com ganho de massa.</div></section>` : ''}
-    <section class="card stack" aria-label="Como medir"><h2 class="label">Como medir</h2>
-      <div class="small muted">De manhã, em jejum e antes de treinar. Fita rente à pele, sem apertar, paralela ao chão. Sempre o mesmo lado. Meça duas vezes e anote a média.</div>
-      ${MEDIDAS.map((m) => `<details class="how"><summary>${m.label}</summary><div class="small">${m.how}</div></details>`).join('')}</section>
     <section class="card" aria-label="Histórico"><h2 class="label" style="margin-bottom:6px">Histórico</h2>
-      ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${e.slice().reverse().map((x) => `<tr><td>${ddmm(x.date)}${MEDIDAS.slice(1).some((m) => num(x[m.id])) ? ' <span class="tag">+ medidas</span>' : ''}${x.fotos && x.fotos.length ? ' <span class="tag">foto</span>' : ''}</td><td><strong>${num(x.peso) ? nf(x.peso, 1) + ' kg' : '—'}</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
+      ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${(UI.histAll ? e.slice().reverse() : e.slice(-5).reverse()).map((x) => `<tr><td>${ddmm(x.date)}${MEDIDAS.slice(1).some((m) => num(x[m.id])) ? ' <span class="tag">+ medidas</span>' : ''}${x.fotos && x.fotos.length ? ' <span class="tag">foto</span>' : ''}</td><td><strong>${num(x.peso) ? nf(x.peso, 1) + ' kg' : '—'}</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>${e.length > 5 ? `<button type="button" class="btn small ghost block" style="margin-top:12px" data-act="histall">${UI.histAll ? 'Mostrar só os 5 últimos' : 'Ver todos os ' + e.length + ' check-ins'}</button>` : ''}` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
     <section class="card stack" aria-label="Exportar histórico"><div class="meal-name">Histórico completo</div>
       <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, a água, as bebidas alcoólicas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
       <button type="button" class="btn small" data-act="exporthist">Exportar histórico</button></section>
@@ -839,14 +848,15 @@ function viewPlano() {
       <div class="toolbar">${o ? '<button type="button" class="btn small ghost" data-act="dupopt">Duplicar opção</button>' : ''}${o && m.opts.length > 1 ? '<button type="button" class="btn danger" data-act="delopt">Apagar opção</button>' : ''}<button type="button" class="btn danger" data-act="delmeal">Apagar refeição</button></div>
     </section>`;
   }
-  return header('Plano', 'Totais com a 1ª opção de cada refeição', ['#macros', 'Macros']) + `
+  return header('Plano', 'Totais com a 1ª opção de cada refeição') + `
     <div class="grid4 plan-tiles" style="gap:10px">${tile('Calorias', t.k, g.kcal, '', 'tot-k')}${tile('Proteína', t.p, g.prot, ' g', 'tot-p')}${tile('Carbo', t.c, g.carb, ' g', 'tot-c')}${tile('Gordura', t.g, g.fat, ' g', 'tot-g')}</div>
-    <section class="card stack" aria-label="Planilha" style="gap:10px"><div class="toolbar"><a class="btn small" href="#compras">${I.compras} Lista de compras</a><button type="button" class="btn small ghost" data-act="import">Importar planilha</button><button type="button" class="btn small ghost" data-act="export">Exportar planilha</button><button type="button" class="btn small ghost" data-act="reset">Restaurar plano padrão</button></div>
-      <div class="small muted">Use a planilha exportada como modelo: colunas Refeição, Horário, Opção, Alimento, Quantidade, kcal, Proteína (g), Carbo (g), Gordura (g) e Dica. Importar substitui o plano atual.</div></section>
+    <section class="card stack" aria-label="Planilha" style="gap:10px"><div class="toolbar"><button type="button" class="btn small ghost" data-act="import">Importar planilha</button><button type="button" class="btn small ghost" data-act="export">Exportar planilha</button><button type="button" class="btn small ghost" data-act="reset">Restaurar plano padrão</button></div>
+      <details class="more"><summary>Formato da planilha</summary><div class="small muted" style="padding-bottom:8px">Use a planilha exportada como modelo: colunas Refeição, Horário, Opção, Alimento, Quantidade, kcal, Proteína (g), Carbo (g), Gordura (g) e Dica. Importar substitui o plano atual.</div></details></section>
     <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>
     <section class="card stack" aria-label="Regras do plano"><h2 class="label">Regras do plano</h2>
       <div class="small muted">A refeição livre (1 por semana) é fixa. Escreva aqui as outras observações, uma por linha. Elas aparecem em Hoje.</div>
-      <textarea class="input" rows="4" data-in="rules" aria-label="Regras do plano, uma por linha">${esc(S.rules.join('\n'))}</textarea></section>`;
+      <textarea class="input" rows="4" data-in="rules" aria-label="Regras do plano, uma por linha">${esc(S.rules.join('\n'))}</textarea></section>
+    ${goalsCard()}`;
 }
 function refreshTotals() {
   const t = planDefaultTotals();
@@ -908,7 +918,7 @@ function viewCompras() {
     }
     return `<div class="stack" style="gap:6px"><span class="field">${esc(m.name)}</span><div class="chips">${m.opts.map((o, i) => `<button type="button" class="chip small-chip ${(C.opt[m.id] || 0) === i ? 'on' : ''}" aria-pressed="${(C.opt[m.id] || 0) === i}" data-act="shopopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(o.name)}</button>`).join('')}</div></div>`;
   }).join('');
-  return header('Compras', C.day >= 0 ? 'Compras ' + shopDayText() : 'A partir do plano', ['#plano', 'Plano']) + `
+  return header('Compras', C.day >= 0 ? 'Compras ' + shopDayText() : 'A partir do plano') + `
     <section class="card stack" aria-label="Como montar a lista">
       <div class="pill" role="group" aria-label="Como escolher as opções" style="align-self:flex-start"><button type="button" data-act="shopmode" data-v="auto" aria-pressed="${auto}">Pelo que você come</button><button type="button" data-act="shopmode" data-v="manual" aria-pressed="${!auto}">Escolher opções</button></div>
       <div class="small muted">${auto ? 'Soma as opções de cada refeição na proporção em que você escolheu cada uma nas últimas 2 semanas. Sem histórico, usa a 1ª opção.' : 'Escolha uma opção por refeição.'}</div>
@@ -1529,6 +1539,7 @@ const ACT = {
     save({ touch: 'plan' });
   },
   exporthist: () => exportHistory(),
+  histall: () => { UI.histAll = !UI.histAll; render(); },
   day: (el) => changeDay(+el.dataset.v),
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {
