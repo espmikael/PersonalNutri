@@ -21,6 +21,7 @@ const opcoesAlmoco = () => [
 /* Observações fixas de refeições (aparecem no card em Hoje e se editam em Plano) */
 const NOTE_LANCHE = 'Este lanche já é o pré-treino: coma 1 a 2 horas antes de treinar e não coma mais nada até o treino. O iogurte fica no café da manhã, longe do treino.';
 const NOTE_CEIA = 'Depois da janta, só uma fruta leve: 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Escolha uma, não precisa somar.';
+const RULE_FRUTA = 'Depois da janta, se bater fome, só uma fruta leve: 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal).';
 const NOTE_POS_JANTA = 'Depois da janta, se bater fome: uma fruta leve. 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Se comer, registre em "+ Anotar" › Comi a mais.';
 /* Opções do lanche da tarde (pré-treino): ~290 a 330 kcal, 23 a 28 g de proteína, carbo de digestão fácil e pouca gordura */
 const LANCHE_OPTS = () => [
@@ -38,9 +39,9 @@ function defaultPlan() {
       { name: 'Ovos mexidos', tip: 'Frigideira antiaderente, sem óleo ou com um fio de azeite. A proteína fica abaixo do shake (23 g contra 42 g); para compensar, junte 2 claras.', items: [it('Ovos mexidos', '3 unidades', 215, 19, 2, 15), it('Tomate picado', '1/2 unidade', 10, 0, 2, 0), it('Cebola picada', '1 col. sopa', 5, 0, 1, 0), it('Pão integral', '1 fatia', 63, 3, 11, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] }
     ] },
     { id: 'almoco', name: 'Almoço', time: '12:00', opts: opcoesAlmoco() },
-    { id: 'pre', name: 'Lanche da tarde', time: '16:00', note: NOTE_LANCHE, opts: LANCHE_OPTS() },
+    { id: 'pre', name: 'Lanche da tarde', time: '16:00', opts: LANCHE_OPTS() },
     { id: 'jantar', name: 'Jantar', time: '21:00', opts: opcoesAlmoco() },
-    { id: 'ceia', name: 'Ceia', time: '22:30', note: NOTE_CEIA, opts: [
+    { id: 'ceia', name: 'Ceia', time: '22:30', opts: [
       { name: 'Mamão', tip: '', items: [it('Mamão papaia', '1/2 unidade', 60, 1, 15, 0)] },
       { name: 'Kiwi', tip: '', items: [it('Kiwi', '1 unidade', 45, 1, 11, 0)] },
       { name: 'Morangos', tip: '', items: [it('Morangos', '10 unidades', 35, 1, 8, 0)] },
@@ -49,7 +50,7 @@ function defaultPlan() {
   ];
 }
 /* Observações do plano (vieram do plano da nutricionista). A refeição livre semanal é fixa e aparece à parte. */
-const DEFAULT_RULES = ['Não pular refeições, mesmo que atrase um pouco.', 'Evitar ultraprocessados.', 'Quando der, preferir alimentos integrais, com mais fibra.'];
+const DEFAULT_RULES = ['Não pular refeições, mesmo que atrase um pouco.', 'Evitar ultraprocessados.', 'Quando der, preferir alimentos integrais, com mais fibra.', RULE_FRUTA];
 const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '' };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
@@ -143,6 +144,14 @@ function migratePlan() {
       if (doce >= 0) { lanche.opts[doce] = novas[0]; changed = true; }
       novas.forEach((o) => { if (!lanche.opts.some((x) => x.name === o.name)) { lanche.opts.push(o); changed = true; } });
     }
+    S.planU = (S.planU || 0) + 1;
+  }
+  /* Observações das refeições saem do card: a do pré-treino some e a da fruta depois da janta vira regra do plano */
+  if (!S.mig.notas) {
+    S.mig.notas = 1;
+    const old = [NOTE_LANCHE, NOTE_CEIA, NOTE_POS_JANTA];
+    S.plan.forEach((m) => { if (m.note && old.includes(m.note)) { delete m.note; changed = true; } });
+    if (!S.rules.some((r) => /fruta leve/i.test(r))) { S.rules.push(RULE_FRUTA); S.rulesU = (S.rulesU || 0) + 1; changed = true; }
     S.planU = (S.planU || 0) + 1;
   }
   return changed;
@@ -534,7 +543,6 @@ function mealCard(m, k, next) {
   const done = isDone(m, k);
   const editing = UI.note && UI.note.meal === m.id;
   const repl = notesOf(k, m.id).some((n) => n.type === 'troca' || n.type === 'livre');
-  const tipOpen = !!(UI.tips && UI.tips[m.id]);
   const check = `<button type="button" class="check ${done ? 'on' : ''} ${UI.flash === m.id ? 'pop' : ''}" data-act="done" data-meal="${esc(m.id)}" aria-pressed="${done}" aria-label="${done ? 'Desmarcar' : 'Marcar'} ${esc(m.name)}">${done ? I.check : ''}</button>`;
   if (done && !editing) {
     const it = mealIntake(m, k);
@@ -549,10 +557,9 @@ function mealCard(m, k, next) {
   const chips = m.opts.length > 1 ? `<div class="chips only-desktop">${m.opts.map((op, i) => `<button type="button" class="chip ${i === oi ? 'on' : ''}" aria-pressed="${i === oi}" data-act="pickopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(op.name)}</button>`).join('')}</div>` : '';
   return `<article class="card meal ${next ? 'is-next' : ''}">
     <div class="meal-main">
-      <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span>${m.note ? `<button type="button" class="info-btn ${tipOpen ? 'on' : ''}" data-act="tip" data-meal="${esc(m.id)}" aria-expanded="${tipOpen}" aria-label="${tipOpen ? 'Esconder' : 'Mostrar'} dica de ${esc(m.name)}">${I.info}</button>` : ''}${next ? '<span class="next-pill">Próxima</span>' : ''}<span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
+      <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span>${next ? '<span class="next-pill">Próxima</span>' : ''}<span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
       ${chips}
       <div class="meal-items">${m.opts.length > 1 ? `<strong style="font-weight:600">${esc(o.name)}:</strong> ` : ''}${esc(o.items.map((i) => i.food + ' ' + i.qty).join(' · '))}</div>
-      ${m.note && tipOpen ? `<div class="meal-note">${esc(m.note)}</div>` : ''}
       ${notesList(k, m.id)}
       <div class="row" style="gap:8px;flex-wrap:wrap">${m.opts.length ? `<a class="opt-link${m.opts.length > 1 ? ' only-mobile' : ''}" href="#refeicao/${encodeURIComponent(m.id)}">${m.opts.length > 1 ? m.opts.length + ' opções' : 'Detalhes'}</a>` : ''}${editing ? '' : `<button type="button" class="note-btn" data-act="noteopen" data-meal="${esc(m.id)}" aria-label="Anotar o que comeu em ${esc(m.name)}">+ Anotar</button>`}</div>
       ${editing ? noteEditor(true) : ''}
@@ -660,7 +667,6 @@ function viewRefeicao(id) {
     (m.opts.length > 1 ? `<div class="stack"><h2 class="label">Opção</h2><div class="chips">${m.opts.map((op, i) => `<button type="button" class="chip ${i === oi ? 'on' : ''}" aria-pressed="${i === oi}" data-act="pickopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(op.name)}</button>`).join('')}</div></div>` : '') +
     `<div class="card list-rows" style="padding:4px 18px">${o.items.map((i) => `<div><span style="font-weight:500">${esc(i.food)}</span><span class="qty">${esc(i.qty)}</span></div>`).join('') || '<div class="muted">Sem alimentos nesta opção.</div>'}</div>
     <div class="grid4"><div class="tile"><span class="num">${nf(x.k)}</span><span>kcal</span></div><div class="tile"><span class="num">${nf(x.p)} g</span><span>proteína</span></div><div class="tile"><span class="num">${nf(x.c)} g</span><span>carbo</span></div><div class="tile"><span class="num">${nf(x.g)} g</span><span>gordura</span></div></div>
-    ${m.note ? `<div class="tip">${I.info}<div>${esc(m.note)}</div></div>` : ''}
     ${o.tip ? `<div class="tip">${I.info}<div>${esc(o.tip)}</div></div>` : ''}
     <button type="button" class="btn block ${done ? 'ghost' : ''}" data-act="done" data-meal="${esc(m.id)}">${done ? 'Feito · desfazer' : 'Marcar como feito'}</button>`;
 }
@@ -854,7 +860,6 @@ function viewPlano() {
     const inp = (i, f, val, type, cls, label) => `<label class="${cls}"><span class="mini">${label}</span><input class="input" type="${type}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} aria-label="${label}" data-in="item" data-i="${i}" data-f="${f}" value="${esc(val)}"></label>`;
     editor = `<section class="card stack" aria-label="Editar refeição" style="gap:16px">
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:10px"><label class="field">Refeição<input class="input" type="text" data-in="meal" data-f="name" value="${esc(m.name)}"></label><label class="field">Horário<input class="input" type="time" data-in="meal" data-f="time" value="${esc(m.time)}"></label></div>
-      <label class="field">Observação da refeição (opcional)<textarea class="input" data-in="meal" data-f="note" rows="2" placeholder="Aparece no card da refeição em Hoje, valendo para todas as opções">${esc(m.note || '')}</textarea></label>
       <div class="stack" style="gap:8px"><span class="field">Opções</span><div class="chips">${m.opts.map((op, i) => `<button type="button" class="chip ${i === oi ? 'on' : ''}" aria-pressed="${i === oi}" data-act="editopt" data-i="${i}">${esc(op.name || 'Sem nome')}</button>`).join('')}<button type="button" class="chip add" data-act="addopt">+ Opção</button></div></div>
       ${o ? `<label class="field">Nome da opção<input class="input" type="text" data-in="opt" data-f="name" value="${esc(o.name)}"></label>
       <label class="field">Dica (opcional)<textarea class="input" data-in="opt" data-f="tip" rows="2">${esc(o.tip || '')}</textarea></label>
@@ -1559,7 +1564,6 @@ const ACT = {
   },
   exporthist: () => exportHistory(),
   histall: () => { UI.histAll = !UI.histAll; render(); },
-  tip: (el) => { UI.tips = UI.tips || {}; UI.tips[el.dataset.meal] = !UI.tips[el.dataset.meal]; render(); },
   day: (el) => changeDay(+el.dataset.v),
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {

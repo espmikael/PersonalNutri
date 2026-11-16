@@ -358,10 +358,6 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .mix-row:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* Observação fixa da refeição */
-.meal-note { background: var(--soft); color: var(--pri-text); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
-.info-btn { position: relative; align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -2px -2px; padding: 0; border: 0; border-radius: 99px; background: transparent; color: var(--pri-text); cursor: pointer; }
-.info-btn:hover, .info-btn.on { background: var(--soft); }
-.info-btn svg { width: 18px; height: 18px; }
 
 /* Ajustes de interface */
 .tap-link { display: inline-block; padding: 12px 6px; margin: -12px -6px; font-weight: 600; }
@@ -372,4 +368,3 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .lg-plan { border-top: 1.5px dashed var(--muted); }
 .lg-ref { border-top: 2px dotted var(--mg); }
 @media (min-width: 900px) { .goals-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.info-btn::before { content: ''; position: absolute; inset: -9px; }
