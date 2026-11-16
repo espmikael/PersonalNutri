@@ -551,7 +551,7 @@ function mealCard(m, k, next) {
       <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span>${next ? '<span class="next-pill">Próxima</span>' : ''}<span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
       ${chips}
       <div class="meal-items">${m.opts.length > 1 ? `<strong style="font-weight:600">${esc(o.name)}:</strong> ` : ''}${esc(o.items.map((i) => i.food + ' ' + i.qty).join(' · '))}</div>
-      ${m.note ? `<div class="meal-note">${I.info}<span>${esc(m.note)}</span></div>` : ''}
+      ${m.note ? `<details class="meal-note"><summary>${I.info}<span>${esc(m.note)}</span></summary></details>` : ''}
       ${notesList(k, m.id)}
       <div class="row" style="gap:8px;flex-wrap:wrap">${m.opts.length ? `<a class="opt-link${m.opts.length > 1 ? ' only-mobile' : ''}" href="#refeicao/${encodeURIComponent(m.id)}">${m.opts.length > 1 ? m.opts.length + ' opções' : 'Detalhes'}</a>` : ''}${editing ? '' : `<button type="button" class="note-btn" data-act="noteopen" data-meal="${esc(m.id)}" aria-label="Anotar o que comeu em ${esc(m.name)}">+ Anotar</button>`}</div>
       ${editing ? noteEditor(true) : ''}
