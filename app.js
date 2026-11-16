@@ -22,6 +22,13 @@ const opcoesAlmoco = () => [
 const NOTE_LANCHE = 'Este lanche já é o pré-treino: coma 1 a 2 horas antes de treinar e não coma mais nada até o treino. O iogurte fica no café da manhã, longe do treino.';
 const NOTE_CEIA = 'Depois da janta, só uma fruta leve: 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Escolha uma, não precisa somar.';
 const NOTE_POS_JANTA = 'Depois da janta, se bater fome: uma fruta leve. 1/2 mamão papaia, 1 kiwi, 10 morangos ou 1 maçã (35 a 70 kcal). Se comer, registre em "+ Anotar" › Comi a mais.';
+/* Opções do lanche da tarde (pré-treino): ~290 a 330 kcal, 23 a 28 g de proteína, carbo de digestão fácil e pouca gordura */
+const LANCHE_OPTS = () => [
+  { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Banana', '1 unidade', 90, 1, 23, 0)] },
+  { name: 'Wrap de frango', tip: 'Dá para deixar o frango desfiado pronto na geladeira para a semana.', items: [it('Rap10 integral', '1 unidade', 115, 3, 19, 3), it('Frango desfiado', '60 g', 98, 19, 0, 2), it('Requeijão light', '1 col. sopa · 15 g', 28, 2, 1, 2), it('Banana', '1 unidade', 90, 1, 23, 0)] },
+  { name: 'Crepioca de frango', tip: 'Tapioca e ovo batidos, recheio de frango desfiado. Opção do plano da nutricionista.', items: [it('Tapioca', '2 col. sopa · 30 g', 100, 0, 25, 0), it('Ovo', '1 unidade', 72, 6, 0, 5), it('Frango desfiado', '50 g', 82, 16, 0, 2), it('Fruta', '1 unidade', 70, 1, 18, 0)] },
+  { name: 'Shake pré-treino', tip: 'Para dias corridos. Whey batido com água, não com leite: digere mais rápido antes do treino.', items: [it('Whey protein', '1 dose', 120, 24, 3, 2), it('Banana', '1 unidade', 90, 1, 23, 0), it('Aveia em flocos', '2 col. sopa · 20 g', 79, 3, 13, 2)] }
+];
 function defaultPlan() {
   return [
     { id: 'cafe', name: 'Café da manhã', time: '07:00', opts: [
@@ -31,9 +38,7 @@ function defaultPlan() {
       { name: 'Ovos mexidos', tip: 'Frigideira antiaderente, sem óleo ou com um fio de azeite. A proteína fica abaixo do shake (23 g contra 42 g); para compensar, junte 2 claras.', items: [it('Ovos mexidos', '3 unidades', 215, 19, 2, 15), it('Tomate picado', '1/2 unidade', 10, 0, 2, 0), it('Cebola picada', '1 col. sopa', 5, 0, 1, 0), it('Pão integral', '1 fatia', 63, 3, 11, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] }
     ] },
     { id: 'almoco', name: 'Almoço', time: '12:00', opts: opcoesAlmoco() },
-    { id: 'pre', name: 'Lanche da tarde', time: '16:00', note: NOTE_LANCHE, opts: [
-      { name: 'Sanduíche', tip: '', items: [it('Pão integral', '2 fatias', 125, 5, 22, 2), it('Queijo mussarela', '1 fatia', 60, 4, 0, 5), it('Peito de peru ou frango desfiado', '60 g', 65, 12, 1, 1), it('Banana', '1 unidade', 90, 1, 23, 0)] }
-    ] },
+    { id: 'pre', name: 'Lanche da tarde', time: '16:00', note: NOTE_LANCHE, opts: LANCHE_OPTS() },
     { id: 'jantar', name: 'Jantar', time: '21:00', opts: opcoesAlmoco() },
     { id: 'ceia', name: 'Ceia', time: '22:30', note: NOTE_CEIA, opts: [
       { name: 'Mamão', tip: '', items: [it('Mamão papaia', '1/2 unidade', 60, 1, 15, 0)] },
@@ -125,6 +130,19 @@ function migratePlan() {
       ceia.opts.forEach((o) => { if (/troque à vontade entre as opções/i.test(o.tip || '')) o.tip = ''; });
       changed = true;
     } else if (!ceia && jantar && !jantar.note) { jantar.note = NOTE_POS_JANTA; changed = true; }
+    S.planU = (S.planU || 0) + 1;
+  }
+  /* Lanche da tarde: o pão com doce sai (pouca proteína) e entram opções equivalentes ao sanduíche.
+     A troca acontece na mesma posição, porque a opção escolhida em cada dia é guardada pela posição. */
+  if (!S.mig.lanche3) {
+    S.mig.lanche3 = 1;
+    const lanche = S.plan.find((m) => /lanche da tarde/i.test(m.name)) || S.plan.find((m) => m.id === 'pre');
+    if (lanche) {
+      const novas = LANCHE_OPTS().slice(1);
+      const doce = lanche.opts.findIndex((o) => /doce de leite|geleia/i.test(o.name));
+      if (doce >= 0) { lanche.opts[doce] = novas[0]; changed = true; }
+      novas.forEach((o) => { if (!lanche.opts.some((x) => x.name === o.name)) { lanche.opts.push(o); changed = true; } });
+    }
     S.planU = (S.planU || 0) + 1;
   }
   return changed;
