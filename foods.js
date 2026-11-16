@@ -1,6 +1,8 @@
 /* Banco de alimentos do PersonalNutri.
    Valores aproximados por 100 g (ou 100 ml nas bebidas), com base na Tabela TACO/Unicamp, na USDA e em rótulos comuns.
-   Formato: [nome, kcal, proteína g, carbo g, gordura g, porção (opcional), gramas da porção]. */
+   Formato: [nome, kcal, proteína g, carbo g, gordura g, porção (opcional), gramas ou ml da porção].
+   Opcional no fim: outras porções [[quantidade, nome], ...] no lugar do atalho "2 ×".
+   Os líquidos (medidos em ml) estão em LIQUIDOS, logo abaixo. */
 (function (root) {
   const FOODS = [
     // Arroz, massas, pães e cereais
@@ -79,6 +81,7 @@
     ['Manteiga', 726, 0.4, 0.1, 82.4, '1 col. chá', 5],
     ['Creme de leite', 221, 1.5, 4.5, 22.5, '1 col. sopa', 15],
     ['Leite condensado', 313, 7.7, 57, 6.7, '1 col. sopa', 20],
+    ['Leite em pó integral', 497, 25.4, 39.2, 26.9, '1 col. sopa', 15],
 
     // Frutas
     ['Banana prata', 98, 1.3, 26.0, 0.1, '1 unidade', 80],
@@ -98,7 +101,7 @@
     ['Goiaba', 54, 1.1, 13.0, 0.4, '1 unidade', 120],
     ['Abacate', 96, 1.2, 6.0, 8.4, '1 col. sopa', 30],
     ['Açaí polpa sem açúcar', 58, 0.8, 6.2, 3.9, '1 pacote', 100],
-    ['Açaí com xarope de guaraná', 110, 0.7, 21.5, 3.7, '1 tigela', 300],
+    ['Açaí tradicional (com xarope de guaraná)', 110, 0.7, 21.5, 3.7, 'Copo de 300 ml', 300, [[500, 'Copo de 500 ml'], [700, 'Copo de 700 ml']]],
     ['Uva-passa', 299, 3.1, 79.2, 0.5, '1 col. sopa', 15],
 
     // Verduras e legumes
@@ -130,9 +133,13 @@
     ['Mel', 309, 0, 84, 0, '1 col. sopa', 20],
     ['Doce de leite', 306, 5.5, 59.5, 6, '1 col. sopa', 20],
     ['Chocolate ao leite', 540, 7.2, 59.6, 30.3, '1 barra pequena', 25],
+    ['Barra de chocolate ao leite', 540, 7.2, 59.6, 30.3, '1 barra', 90],
+    ['Barra de chocolate meio amargo', 475, 4.9, 62.4, 29.9, '1 barra', 90],
+    ['Paçoca', 487, 16, 52.4, 26.1, '1 unidade', 20],
     ['Bombom', 490, 5, 60, 25, '1 unidade', 20],
     ['Brigadeiro', 440, 4, 65, 18, '1 unidade', 20],
     ['Sorvete de creme', 207, 3.5, 23.6, 11, '1 bola', 60],
+    ['Sorvete napolitano', 180, 3, 24, 8, '1 bola', 60],
     ['Bolo simples', 330, 5, 55, 10, '1 fatia', 60],
     ['Biscoito recheado', 472, 6.4, 70.5, 19.6, '1 unidade', 12],
     ['Barra de cereal', 390, 5, 72, 9, '1 unidade', 25],
@@ -155,5 +162,8 @@
     ['Água de coco', 22, 0, 5.3, 0, '1 copo', 250],
     ['Café sem açúcar', 2, 0.1, 0.3, 0, '1 xícara', 50]
   ];
+  /* Medidos em ml: bebidas, leites líquidos e o açaí de copo */
+  const LIQUIDOS = /^(Refrigerante|Suco|Água|Café|Leite (integral|desnatado)$|Açaí tradicional)/;
+  FOODS.isLiquid = (name) => LIQUIDOS.test(name);
   if (typeof module !== 'undefined' && module.exports) module.exports = FOODS; else root.FOODS = FOODS;
 })(typeof self !== 'undefined' ? self : this);

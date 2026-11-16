@@ -168,3 +168,12 @@ test('lista automática segue a proporção das opções comidas nas últimas 2 
   // Sem histórico, tudo na 1ª opção
   assert.deepEqual(C.optionMix(base({ plan: s.plan }), s.plan[0], D), [1, 0]);
 });
+
+test('banco de alimentos: novos itens e unidade (g ou ml)', () => {
+  ['sorvete napolitano', 'barra chocolate', 'acai tradicional', 'pacoca'].forEach((q) => assert.ok(C.searchFoods(FOODS, q).length, q));
+  assert.ok(FOODS.isLiquid('Açaí tradicional (com xarope de guaraná)'));
+  assert.ok(FOODS.isLiquid('Leite desnatado'));
+  assert.ok(!FOODS.isLiquid('Leite condensado'));
+  assert.ok(!FOODS.isLiquid('Leite em pó integral'));
+  assert.ok(!FOODS.isLiquid('Açaí polpa sem açúcar'));
+});

@@ -493,12 +493,13 @@ function lastMeasure(id) { for (let i = S.checkins.length - 1; i >= 0; i--) if (
 
 /* ---------- Banco de alimentos (busca) ---------- */
 const FOOD_LIST = window.FOODS || [];
+const foodUnit = (f) => (FOOD_LIST.isLiquid && FOOD_LIST.isLiquid(f[0]) ? 'ml' : 'g');
 function foodResultsHtml() {
   const P = UI.pick;
   if (!P || !P.q.trim()) return '<div class="small muted">Digite pelo menos uma palavra. Ex.: arroz, frango, pizza.</div>';
   const res = Core.searchFoods(FOOD_LIST, P.q);
   if (!res.length) return '<div class="small muted">Nada encontrado. Escreva à mão e estime as calorias.</div>';
-  return res.map(({ f, i }) => `<button type="button" class="food-res" data-act="pickfood" data-i="${i}"><span>${esc(f[0])}</span><span class="muted small">${nf(f[1])} kcal · P ${nf(f[2], 1)} em 100 ${/^(Refrigerante|Suco|Água|Café|Leite)/.test(f[0]) ? 'ml' : 'g'}</span></button>`).join('');
+  return res.map(({ f, i }) => `<button type="button" class="food-res" data-act="pickfood" data-i="${i}"><span>${esc(f[0])}</span><span class="muted small">${nf(f[1])} kcal · P ${nf(f[2], 1)} em 100 ${foodUnit(f)}</span></button>`).join('');
 }
 function foodPreview() {
   const P = UI.pick; const f = FOOD_LIST[P.sel];
@@ -510,7 +511,8 @@ function foodPicker() {
   if (!P) return '';
   if (P.sel !== null && FOOD_LIST[P.sel]) {
     const f = FOOD_LIST[P.sel];
-    const portions = [[100, '100 g']].concat(f[5] ? [[f[6], `${f[5]} (${f[6]} g)`], [f[6] * 2, `2 × ${f[5]}`]] : []);
+    const u = foodUnit(f);
+    const portions = [[100, '100 ' + u]].concat(f[5] ? [[f[6], f[5].includes(' ml') ? f[5] : `${f[5]} (${f[6]} ${u})`]].concat(f[7] || [[f[6] * 2, `2 × ${f[5]}`]]) : []);
     return `<div class="picker" role="group" aria-label="Quantidade do alimento">
       <div class="between"><strong>${esc(f[0])}</strong><button type="button" class="link-btn" data-act="pickback">Trocar</button></div>
       <div class="chips">${portions.map(([gr, l]) => `<button type="button" class="chip small-chip ${num(P.grams) === gr ? 'on' : ''}" data-act="pickgrams" data-v="${gr}">${esc(l)}</button>`).join('')}</div>
@@ -1547,7 +1549,7 @@ const ACT = {
     const P = UI.pick; const f = FOOD_LIST[P.sel];
     if (!f || !num(P.grams)) { toast('Informe a quantidade'); return; }
     const x = Core.foodMacros(f, P.grams);
-    const qty = nf(num(P.grams)) + (/^(Refrigerante|Suco|Água|Café|Leite)/.test(f[0]) ? ' ml' : ' g');
+    const qty = nf(num(P.grams)) + ' ' + foodUnit(f);
     if (P.ctx === 'note' && UI.note) {
       const N = UI.note;
       N.items.push({ food: f[0], qty, ...x });
