@@ -534,6 +534,7 @@ function mealCard(m, k, next) {
   const done = isDone(m, k);
   const editing = UI.note && UI.note.meal === m.id;
   const repl = notesOf(k, m.id).some((n) => n.type === 'troca' || n.type === 'livre');
+  const tipOpen = !!(UI.tips && UI.tips[m.id]);
   const check = `<button type="button" class="check ${done ? 'on' : ''} ${UI.flash === m.id ? 'pop' : ''}" data-act="done" data-meal="${esc(m.id)}" aria-pressed="${done}" aria-label="${done ? 'Desmarcar' : 'Marcar'} ${esc(m.name)}">${done ? I.check : ''}</button>`;
   if (done && !editing) {
     const it = mealIntake(m, k);
@@ -548,10 +549,10 @@ function mealCard(m, k, next) {
   const chips = m.opts.length > 1 ? `<div class="chips only-desktop">${m.opts.map((op, i) => `<button type="button" class="chip ${i === oi ? 'on' : ''}" aria-pressed="${i === oi}" data-act="pickopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(op.name)}</button>`).join('')}</div>` : '';
   return `<article class="card meal ${next ? 'is-next' : ''}">
     <div class="meal-main">
-      <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span>${next ? '<span class="next-pill">Próxima</span>' : ''}<span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
+      <div class="meal-head"><span class="time">${esc(m.time)}</span><span class="meal-name">${esc(m.name)}</span>${m.note ? `<button type="button" class="info-btn ${tipOpen ? 'on' : ''}" data-act="tip" data-meal="${esc(m.id)}" aria-expanded="${tipOpen}" aria-label="${tipOpen ? 'Esconder' : 'Mostrar'} dica de ${esc(m.name)}">${I.info}</button>` : ''}${next ? '<span class="next-pill">Próxima</span>' : ''}<span class="meal-macro only-desktop">${nf(x.k)} kcal · P ${nf(x.p)} · C ${nf(x.c)} · G ${nf(x.g)}</span></div>
       ${chips}
       <div class="meal-items">${m.opts.length > 1 ? `<strong style="font-weight:600">${esc(o.name)}:</strong> ` : ''}${esc(o.items.map((i) => i.food + ' ' + i.qty).join(' · '))}</div>
-      ${m.note ? `<details class="meal-note"><summary>${I.info}<span>${esc(m.note)}</span></summary></details>` : ''}
+      ${m.note && tipOpen ? `<div class="meal-note">${esc(m.note)}</div>` : ''}
       ${notesList(k, m.id)}
       <div class="row" style="gap:8px;flex-wrap:wrap">${m.opts.length ? `<a class="opt-link${m.opts.length > 1 ? ' only-mobile' : ''}" href="#refeicao/${encodeURIComponent(m.id)}">${m.opts.length > 1 ? m.opts.length + ' opções' : 'Detalhes'}</a>` : ''}${editing ? '' : `<button type="button" class="note-btn" data-act="noteopen" data-meal="${esc(m.id)}" aria-label="Anotar o que comeu em ${esc(m.name)}">+ Anotar</button>`}</div>
       ${editing ? noteEditor(true) : ''}
@@ -1558,6 +1559,7 @@ const ACT = {
   },
   exporthist: () => exportHistory(),
   histall: () => { UI.histAll = !UI.histAll; render(); },
+  tip: (el) => { UI.tips = UI.tips || {}; UI.tips[el.dataset.meal] = !UI.tips[el.dataset.meal]; render(); },
   day: (el) => changeDay(+el.dataset.v),
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {
