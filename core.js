@@ -110,6 +110,7 @@
     });
     out.checkins = [...byDate.values()].filter((c) => alive('c:' + c.date, c.u)).sort((x, y) => x.date.localeCompare(y.date));
 
+    out.deals = mergeDeals(local.deals, remote.deals);
     out.free = {}; out.freeU = {};
     const lf = local.free || {}, rf = remote.free || {}, lu = local.freeU || {}, ru = remote.freeU || {};
     new Set([...Object.keys(lf), ...Object.keys(rf)]).forEach((ws) => {
@@ -267,6 +268,63 @@
     return [...map.values()].sort((a, b) => a.food.localeCompare(b.food, 'pt-BR'));
   }
 
+  /* ---------- Padrões: como foi cada dia em relação à meta ----------
+     Refeição do plano não marcada conta como não feita. Dentro de ±tol da meta é "ok";
+     dia com anotação de refeição livre é "livre" (previsto no plano). A causa principal é a que
+     mais pesou: categorias das anotações de "comi a mais", trocas, bebida alcoólica ou refeições não feitas. */
+  const CAUSES = {
+    doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior', outro: 'Comeu além do plano',
+    troca: 'Trocou por algo mais calórico', pulou: 'Refeição não feita', menos: 'Comeu menos que o plano', livre: 'Refeição livre', plano: 'Plano acima da meta', semkcal: 'Troca sem calorias anotadas'
+  };
+  function dayReview(s, k, tol = 0.1) {
+    const meta = num((s.goals || {}).kcal);
+    const tot = consumed(s, k);
+    const kcal = Math.round(tot.k);
+    const diff = meta ? kcal - meta : 0;
+    const cells = [];
+    const over = {}, under = {};
+    const put = (o, c, v) => { o[c] = (o[c] || 0) + v; };
+    const missed = [];
+    let livre = false;
+    mealsOfDay(s, k).forEach((m) => {
+      if (m.orphan && !isDone(s, m, k) && !notesOf(s, k, m.id).length) return;
+      const ns = notesOf(s, k, m.id);
+      const repl = ns.filter(REPL);
+      if (ns.some((n) => n.type === 'livre')) { livre = true; cells.push({ meal: m.id, kind: 'livre' }); }
+      const pl = planned(s, m, k);
+      if (!repl.length && !isDone(s, m, k)) { missed.push(m.name); put(under, 'pulou', pl.k); cells.push({ meal: m.id, kind: 'under' }); }
+      else if (repl.length && !ns.some((n) => n.type === 'livre')) {
+        const d = repl.reduce((a, n) => a + num(n.kcal), 0) - pl.k;
+        if (!repl.some((n) => num(n.kcal))) { put(under, 'semkcal', pl.k); cells.push({ meal: m.id, kind: 'under' }); }
+        else if (d > 0) { put(over, 'troca', d); cells.push({ meal: m.id, kind: 'over' }); }
+        else if (d < -50) { put(under, 'menos', -d); cells.push({ meal: m.id, kind: 'under' }); }
+      }
+      ns.filter((n) => n.type === 'extra').forEach((n) => { put(over, n.cat || 'outro', num(n.kcal)); cells.push({ meal: m.id, kind: 'over' }); });
+    });
+    notesOf(s, k, FORA).forEach((n) => {
+      if (n.type === 'livre') { livre = true; cells.push({ meal: FORA, kind: 'livre' }); return; }
+      put(over, n.cat || 'outro', num(n.kcal)); cells.push({ meal: FORA, kind: 'over' });
+    });
+    if (tot.drink) { put(over, 'bebida', tot.drink); cells.push({ meal: FORA, kind: 'over' }); }
+    let st = 'ok';
+    if (livre) st = 'livre';
+    else if (meta && kcal > meta * (1 + tol)) st = 'over';
+    else if (meta && kcal < meta * (1 - tol)) st = 'under';
+    const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+    let cause = null;
+    if (st === 'livre') cause = 'livre';
+    else if (st === 'over') cause = (top(over) || ['plano'])[0];
+    else if (st === 'under') cause = (top(under) || ['menos'])[0];
+    const keep = st === 'ok' ? [] : cells.filter((c) => st === 'livre' ? c.kind !== 'under' : c.kind === (st === 'over' ? 'over' : 'under'));
+    return { k, kcal, meta, diff, st, cause, missed, cells: keep, over, under };
+  }
+  /* Combinado da semana (revisão semanal): o mais novo vence, por semana */
+  function mergeDeals(local, remote) {
+    const out = { ...(remote || {}) };
+    Object.entries(local || {}).forEach(([ws, v]) => { if (!out[ws] || (v.u || 0) > (out[ws].u || 0)) out[ws] = v; });
+    return out;
+  }
+
   /* ---------- Banco de alimentos ---------- */
   function searchFoods(list, q, max = 8) {
     const words = norm(q).split(/\s+/).filter(Boolean);
@@ -286,7 +344,8 @@
   const api = {
     num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
     FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
-    mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros
+    mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros,
+    CAUSES, dayReview, mergeDeals
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(typeof self !== 'undefined' ? self : this);
