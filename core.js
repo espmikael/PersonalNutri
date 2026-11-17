@@ -325,25 +325,6 @@
     return out;
   }
 
-  /* ---------- TreinoHoje (só leitura) ----------
-     O TreinoHoje guarda { sessoes: [{ data: ISO, tipo: 'A'|'B'|...|'corrida', foco, corrida: { km, min } }] }.
-     Aqui vira um mapa por dia (data local) com o essencial. */
-  function treinosPorDia(dados) {
-    const out = {};
-    ((dados && dados.sessoes) || []).forEach((x) => {
-      if (!x || !x.data) return;
-      const d = new Date(x.data);
-      if (isNaN(d)) return;
-      const k = keyOf(d);
-      const t = x.tipo === 'corrida'
-        ? { tipo: 'corrida', km: num(x.corrida && x.corrida.km) || 0, min: num(x.corrida && x.corrida.min) || 0 }
-        : { tipo: String(x.tipo || ''), foco: String(x.foco || '') };
-      (out[k] = out[k] || []).push(t);
-    });
-    return out;
-  }
-  const treinoTxt = (t) => t.tipo === 'corrida' ? 'Corrida' + (t.km ? ' ' + String(t.km).replace('.', ',') + ' km' : '') : 'Treino ' + t.tipo + (t.foco ? ' · ' + t.foco : '');
-
   /* ---------- Banco de alimentos ---------- */
   function searchFoods(list, q, max = 8) {
     const words = norm(q).split(/\s+/).filter(Boolean);
@@ -364,7 +345,7 @@
     num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
     FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
     mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros,
-    CAUSES, dayReview, mergeDeals, treinosPorDia, treinoTxt
+    CAUSES, dayReview, mergeDeals
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(typeof self !== 'undefined' ? self : this);

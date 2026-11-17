@@ -163,24 +163,7 @@ const REMIND_KEY = 'personalnutri_lembretes';
 const SHOP_KEY = 'personalnutri_compras';
 const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch (e) { return fb; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* armazenamento bloqueado */ } };
-/* Treinos lidos do TreinoHoje (mesma conta, mesmo Supabase). Só leitura: o PersonalNutri nunca grava lá. */
-const TREINO_KEY = 'personalnutri_treinos';
-const TREINO_TABLE = 'treinohoje';
-let TREINOS = lsGet(TREINO_KEY, null);
-const treinosDe = (k) => (TREINOS && TREINOS.days && TREINOS.days[k]) || [];
-async function fetchTreinos(force) {
-  if (!sb || !UI.auth.user) return;
-  if (!force && TREINOS && TREINOS.uid === UI.auth.user.id && Date.now() - (TREINOS.at || 0) < 10 * 60000) return;
-  try {
-    const { data, error } = await sb.from(TREINO_TABLE).select('dados').eq('user_id', UI.auth.user.id).maybeSingle();
-    if (error) throw error;
-    const days = data ? Core.treinosPorDia(data.dados) : {};
-    TREINOS = { uid: UI.auth.user.id, at: Date.now(), found: !!data, days };
-  } catch (e) {
-    TREINOS = { ...(TREINOS || {}), uid: UI.auth.user.id, at: Date.now(), err: (e && e.message) || 'erro' };
-  }
-  lsSet(TREINO_KEY, TREINOS);
-}
+try { localStorage.removeItem('personalnutri_treinos'); } catch (e) { /* cópia antiga dos treinos do TreinoHoje, que não é mais lida */ }
 
 /* ---------- Estado ---------- */
 let S = loadLocal();
@@ -1215,7 +1198,7 @@ function prefsCards() {
 function dadosCard() {
   return `<section class="card stack" aria-label="Dados"><div class="meal-name">Dados</div>
     <div class="list-btns">
-      <button type="button" class="row-btn" data-act="exporthist"><span><strong>Exportar histórico</strong><span class="small muted">Planilha com cada dia, refeições, anotações, treinos, check-ins e combinados</span></span>${I.chev}</button>
+      <button type="button" class="row-btn" data-act="exporthist"><span><strong>Exportar histórico</strong><span class="small muted">Planilha com cada dia, refeições, anotações, check-ins e combinados</span></span>${I.chev}</button>
       <button type="button" class="row-btn" data-act="export"><span><strong>Exportar plano</strong><span class="small muted">Planilha do plano atual</span></span>${I.chev}</button>
       <button type="button" class="row-btn" data-act="import"><span><strong>Importar plano</strong><span class="small muted">Substitui o plano atual pela planilha</span></span>${I.chev}</button>
       <button type="button" class="row-btn" data-act="reset"><span><strong>Restaurar plano padrão</strong></span>${I.chev}</button>
@@ -1580,7 +1563,6 @@ function historyDays() {
   return out;
 }
 async function exportHistory() {
-  await fetchTreinos(true); /* treinos do TreinoHoje só entram na planilha */
   const days = historyDays();
   if (!days.length) { toast('Ainda não há histórico para exportar'); return; }
   try {
@@ -1623,7 +1605,6 @@ async function exportHistory() {
         'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida alcoólica': Math.round(kBeb), 'kcal total': Math.round(total),
         'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
         'Situação': rv ? PD_TXT[rv.st] : '', 'Causa principal': rv && rv.cause ? causeTxt(rv.cause) : '', 'Refeições não feitas': rv ? rv.missed.join(', ') : '',
-        'Treino (TreinoHoje)': treinosDe(k).map(Core.treinoTxt).join(' + '),
         'Proteína (g)': Math.round(p), 'Carbo (g)': Math.round(c), 'Gordura (g)': Math.round(gg),
         'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
         'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
@@ -1640,7 +1621,6 @@ async function exportHistory() {
       { 'Leia-me': 'Situação: na meta (kcal total dentro de ±10% da meta), acima, abaixo ou refeição livre (prevista no plano, 1 por semana). Hoje fica em branco porque o dia não terminou.' },
       { 'Leia-me': 'Causa principal: o que mais pesou no dia fora da meta. Acima: categoria da anotação de "comi a mais" (doce, bebida, salgado ou fast food, porção maior), troca mais calórica ou bebida alcoólica. Abaixo: refeição não feita ou porção menor.' },
       { 'Leia-me': 'Combinados: o que o usuário combinou consigo mesmo para cada semana, na revisão semanal do app.' },
-      { 'Leia-me': 'Treino (TreinoHoje): treinos registrados no app TreinoHoje na mesma conta (A, B, C... ou corrida com km). Vazio = sem treino registrado, ou conta não conectada.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum. Medidas com fita, sempre do lado direito: cintura no umbigo (semanal); peito na linha dos mamilos, braço contraído no pico do bíceps, coxa logo abaixo do glúteo e quadril no ponto mais largo (a cada 2 a 4 semanas).' }
@@ -1654,7 +1634,7 @@ async function exportHistory() {
     const wb = XLSX.utils.book_new();
     const add = (rows, name, cols) => { const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': 'Sem registros' }]); if (cols) ws['!cols'] = cols.map((w) => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
     add(leia, 'Leia-me', [110]);
-    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 14, 26, 30, 28, 10, 10, 10, 9, 9, 9, 9, 9, 9, 80]);
+    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 14, 26, 30, 10, 10, 10, 9, 9, 9, 9, 9, 9, 80]);
     add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
     add(anotacoes, 'Anotações', [11, 18, 16, 18, 50, 10, 10, 10, 10]);
     add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas alcoólicas');
