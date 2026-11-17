@@ -30,13 +30,16 @@ const LANCHE_OPTS = () => [
   { name: 'Crepioca de frango', tip: 'Tapioca e ovo batidos, recheio de frango desfiado. Opção do plano da nutricionista.', items: [it('Tapioca', '2 col. sopa · 30 g', 100, 0, 25, 0), it('Ovo', '1 unidade', 72, 6, 0, 5), it('Frango desfiado', '50 g', 82, 16, 0, 2), it('Fruta', '1 unidade', 70, 1, 18, 0)] },
   { name: 'Shake pré-treino', tip: 'Para dias corridos. Whey batido com água, não com leite: digere mais rápido antes do treino.', items: [it('Whey protein', '1 dose', 120, 24, 3, 2), it('Banana', '1 unidade', 90, 1, 23, 0), it('Aveia em flocos', '2 col. sopa · 20 g', 79, 3, 13, 2)] }
 ];
+/* Café de fim de semana: ovos mexidos com bacon (1 vez por semana; passa a meta de gordura do dia) */
+const OPT_BACON = () => ({ name: 'Ovos com bacon', tip: 'Bacon sem óleo, até ficar sequinho, e escorra no papel toalha. Faça os ovos em outra frigideira ou tire a gordura que ficou. Uma vez por semana: o dia passa uns 13 g da meta de gordura e tem menos proteína que o shake.', items: [it('Ovos mexidos', '2 unidades', 145, 13, 1, 10), it('Bacon frito e escorrido', '3 fatias', 130, 9, 0, 11), it('Tomate picado', '1/2 unidade', 10, 0, 2, 0), it('Pão integral', '1 fatia', 63, 3, 11, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] });
 function defaultPlan() {
   return [
     { id: 'cafe', name: 'Café da manhã', time: '07:00', opts: [
       { name: 'Shake', tip: 'Bata tudo junto, com o iogurte. Fruta: banana, maçã, 8 morangos ou 1/2 manga.', items: [it('Whey protein', '1 dose', 120, 24, 3, 2), it('Leite desnatado', '300 ml', 105, 10, 15, 1), it('Iogurte natural', '1 pote · 170 g', 105, 7, 9, 6), it('Fruta', '1 unidade', 90, 1, 23, 0)] },
       { name: 'Panqueca de banana', tip: 'Amasse a banana, misture os ovos e o farelo e doure em fogo baixo.', items: [it('Banana', '1 unidade', 90, 1, 23, 0), it('Ovos', '2 unidades', 145, 13, 1, 10), it('Farelo de aveia', '3 col. sopa · 33 g', 85, 6, 18, 2)] },
       { name: 'Crepioca', tip: '', items: [it('Tapioca', '3 col. sopa · 45 g', 155, 0, 38, 0), it('Ovos', '2 unidades', 145, 13, 1, 10), it('Requeijão light', '1 col. sopa · 20 g', 40, 2, 1, 2)] },
-      { name: 'Ovos mexidos', tip: 'Frigideira antiaderente, sem óleo ou com um fio de azeite. A proteína fica abaixo do shake (23 g contra 42 g); para compensar, junte 2 claras.', items: [it('Ovos mexidos', '3 unidades', 215, 19, 2, 15), it('Tomate picado', '1/2 unidade', 10, 0, 2, 0), it('Cebola picada', '1 col. sopa', 5, 0, 1, 0), it('Pão integral', '1 fatia', 63, 3, 11, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] }
+      { name: 'Ovos mexidos', tip: 'Frigideira antiaderente, sem óleo ou com um fio de azeite. A proteína fica abaixo do shake (23 g contra 42 g); para compensar, junte 2 claras.', items: [it('Ovos mexidos', '3 unidades', 215, 19, 2, 15), it('Tomate picado', '1/2 unidade', 10, 0, 2, 0), it('Cebola picada', '1 col. sopa', 5, 0, 1, 0), it('Pão integral', '1 fatia', 63, 3, 11, 1), it('Fruta', '1 unidade', 70, 1, 18, 0)] },
+      OPT_BACON()
     ] },
     { id: 'almoco', name: 'Almoço', time: '12:00', opts: opcoesAlmoco() },
     { id: 'pre', name: 'Lanche da tarde', time: '16:00', opts: LANCHE_OPTS() },
@@ -144,6 +147,13 @@ function migratePlan() {
       if (doce >= 0) { lanche.opts[doce] = novas[0]; changed = true; }
       novas.forEach((o) => { if (!lanche.opts.some((x) => x.name === o.name)) { lanche.opts.push(o); changed = true; } });
     }
+    S.planU = (S.planU || 0) + 1;
+  }
+  /* Café: entra a opção de ovos com bacon (uma vez; se a pessoa apagar, não volta) */
+  if (!S.mig.bacon) {
+    S.mig.bacon = 1;
+    const cafe = S.plan.find((m) => m.id === 'cafe') || S.plan.find((m) => /caf[eé] da manh/i.test(m.name));
+    if (cafe && !cafe.opts.some((o) => /bacon/i.test(o.name))) { cafe.opts.push(OPT_BACON()); changed = true; }
     S.planU = (S.planU || 0) + 1;
   }
   /* Observações das refeições saem do card: a do pré-treino some e a da fruta depois da janta vira regra do plano */
