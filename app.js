@@ -180,7 +180,6 @@ async function fetchTreinos(force) {
     TREINOS = { ...(TREINOS || {}), uid: UI.auth.user.id, at: Date.now(), err: (e && e.message) || 'erro' };
   }
   lsSet(TREINO_KEY, TREINOS);
-  render();
 }
 
 /* ---------- Estado ---------- */
@@ -883,7 +882,6 @@ function pdDayCard(cells) {
   return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
     <div class="pd-selhead">${arrow(newer, 'Dia fora da meta mais recente', '‹')}<div class="pd-seltitle"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="small muted" style="font-weight:600">${pos >= 0 ? `${pos + 1} de ${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : q.length ? `${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : 'Nenhum dia fora da meta'}</span></div>${arrow(older, 'Dia fora da meta mais antigo', '›')}</div>
     <div class="between" style="align-items:baseline"><span><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
-    ${treinosDe(pick.k).map((t) => `<div class="pd-treino">${esc(Core.treinoTxt(t))}<span>TreinoHoje</span></div>`).join('')}
     ${r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
     ${lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
     ${pick.k >= addDays(todayKey(), -MAX_BACK) ? `<button type="button" class="btn small" style="align-self:flex-start" data-act="openday" data-k="${pick.k}">Abrir o dia</button>` : ''}
@@ -957,25 +955,7 @@ function pdWeekCard() {
       <div class="small muted">Vai junto na exportação do histórico.</div></div>
   </section>`;
 }
-/* Dieta × treino: só aparece com pelo menos 3 dias de cada lado no período */
-function pdTreinoCard(cells) {
-  const rs = cells.filter((c) => c.r);
-  const com = rs.filter((c) => treinosDe(c.k).length), sem = rs.filter((c) => !treinosDe(c.k).length);
-  if (com.length < 3 || sem.length < 3) return '';
-  const avg = (a) => a.reduce((x, c) => x + c.r.kcal, 0) / a.length;
-  const off = (a) => a.filter((c) => c.r.st === 'over' || c.r.st === 'under').length;
-  const miss = {};
-  com.forEach((c) => c.r.missed.forEach((m) => { (miss[m] = miss[m] || []).push(c.k); }));
-  const top = Object.entries(miss).sort((a, b) => b[1].length - a[1].length)[0];
-  return `<section class="card stack" aria-label="Dieta e treino"><div class="between"><h2 class="label">Dieta × treino</h2><span class="small muted">TreinoHoje</span></div>
-    <div class="between small"><span>Média em dia de treino <span class="muted">(${com.length})</span></span><strong class="num">${nf(avg(com))} kcal</strong></div>
-    <div class="between small"><span>Média sem treino <span class="muted">(${sem.length})</span></span><strong class="num">${nf(avg(sem))} kcal</strong></div>
-    <div class="between small"><span>Dias fora da meta</span><span><strong>${off(com)}</strong> com treino · <strong>${off(sem)}</strong> sem</span></div>
-    ${top && top[1].length >= 2 ? `<div class="small" style="border-top:1px solid var(--line);padding-top:8px"><strong>${esc(top[0])} não feito em ${top[1].length} dias de treino</strong><br><span class="muted">${top[1].map(ddmm).join(', ')}</span></div>` : ''}
-  </section>`;
-}
 function viewAlimentacao() {
-  setTimeout(() => fetchTreinos(), 0);
   const weeks = UI.pw || 4;
   const cells = reviewRange(weeks);
   const rs = cells.filter((c) => c.r).map((c) => c.r);
@@ -996,8 +976,8 @@ function viewAlimentacao() {
     const a = wr.length ? wr.reduce((s2, r) => s2 + r.kcal, 0) / wr.length : null;
     const acls = a === null ? '' : a > hi ? 'pd-t-over' : a < lo ? 'pd-t-under' : '';
     cal.push(`<div class="pd-calrow">${row.map((x) => x.r
-      ? `<button type="button" class="pd-day pd-${x.r.st} ${UI.pday === x.k ? 'on' : ''}" data-act="pday" data-k="${x.k}" aria-label="${WD_SHORT[x.i % 7]} ${ddmm(x.k)}: ${nf(x.r.kcal)} kcal, ${PD_TXT[x.r.st].toLowerCase()}${treinosDe(x.k).length ? ', treinou' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g">${PD_GLYPH[x.r.st]}</span>${treinosDe(x.k).length ? '<span class="pd-tr" aria-hidden="true"></span>' : ''}</button>`
-      : `<span class="pd-day pd-none ${x.today ? 'today' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g"></span>${treinosDe(x.k).length ? '<span class="pd-tr" aria-hidden="true"></span>' : ''}</span>`).join('')}<span class="pd-avg num ${acls}">${a === null ? '' : nf(a)}</span></div>`);
+      ? `<button type="button" class="pd-day pd-${x.r.st} ${UI.pday === x.k ? 'on' : ''}" data-act="pday" data-k="${x.k}" aria-label="${WD_SHORT[x.i % 7]} ${ddmm(x.k)}: ${nf(x.r.kcal)} kcal, ${PD_TXT[x.r.st].toLowerCase()}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g">${PD_GLYPH[x.r.st]}</span></button>`
+      : `<span class="pd-day pd-none ${x.today ? 'today' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g"></span></span>`).join('')}<span class="pd-avg num ${acls}">${a === null ? '' : nf(a)}</span></div>`);
   }
   const summary = `<section class="card stack" aria-label="Dias fora da meta"><div class="between" style="align-items:center"><h2 class="label">Calorias</h2>
       <div class="pill small-pill" role="group" aria-label="Período"><button type="button" data-act="pw" data-v="4" aria-pressed="${weeks === 4}">4 semanas</button><button type="button" data-act="pw" data-v="8" aria-pressed="${weeks === 8}">8 semanas</button></div></div>
@@ -1009,10 +989,10 @@ function viewAlimentacao() {
     </div>
     <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
     <div class="pd-cal"><div class="pd-calrow pd-calhead">${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}<span class="pd-avg">média</span></div>${cal.join('')}</div>
-    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li>${cells.some((c) => treinosDe(c.k).length) ? '<li><span class="lg-tr"></span>Treinou</li>' : ''}</ul>
+    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li></ul>
   </section>`;
   const dayCard = pdDayCard(cells);
-  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdTreinoCard(cells)}${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
+  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
 }
 function viewProgresso() {
   const g = S.goals;
@@ -1232,18 +1212,6 @@ function prefsCards() {
         <div class="small muted">Só avisa refeições que ainda não foram marcadas, e água se estiver abaixo do esperado para a hora (entre 8h e 22h).</div>` : '<div class="small muted">Avisa na hora de cada refeição e, se quiser, para beber água.</div>'}
     <div class="small muted">Os avisos funcionam com o app aberto ou em segundo plano há pouco tempo. Com o app fechado por completo, o navegador não deixa um site avisar sem um servidor de notificações.</div></section>`;
 }
-function treinoCard() {
-  const T = TREINOS && TREINOS.uid === (UI.auth.user || {}).id ? TREINOS : null;
-  const ks = T && T.days ? Object.keys(T.days).sort() : [];
-  let st, txt;
-  if (!T) { st = 'Buscando…'; txt = 'Lendo os treinos do TreinoHoje.'; }
-  else if (T.err && !ks.length) { st = 'Sem acesso'; txt = 'Não consegui ler os treinos agora. Tente atualizar.'; }
-  else if (!T.found || !ks.length) { st = 'Nenhum treino'; txt = 'Entre no TreinoHoje com este mesmo e-mail para os treinos aparecerem aqui.'; }
-  else { st = 'Conectado'; txt = `${ks.length} ${ks.length === 1 ? 'dia' : 'dias'} com treino · último em ${ddmm(ks[ks.length - 1])}`; }
-  return `<section class="card stack" aria-label="TreinoHoje"><div class="between" style="align-items:center"><span class="meal-name">TreinoHoje</span><span class="tag">${esc(st)}</span></div>
-    <div class="small muted">${esc(txt)} Só leitura: o PersonalNutri não muda nada no TreinoHoje.</div>
-    <button type="button" class="btn small ghost" style="align-self:flex-start" data-act="treinosync">Atualizar treinos</button></section>`;
-}
 function dadosCard() {
   return `<section class="card stack" aria-label="Dados"><div class="meal-name">Dados</div>
     <div class="list-btns">
@@ -1263,7 +1231,7 @@ function viewConta() {
   if (u) {
     return head + `<div class="card stack"><div class="small muted" style="font-weight:600">Conectado como</div><div class="meal-name" style="word-break:break-all">${esc(u.email)}</div>
       <div class="small muted" data-sync>${esc(UI.sync || 'Os dados sincronizam sozinhos entre o celular e o PC.')}</div>
-      <div class="toolbar"><button type="button" class="btn small" data-act="syncnow">Sincronizar agora</button><button type="button" class="btn small ghost" data-act="logout">Sair</button></div></div>` + treinoCard() + prefsCards() + dadosCard();
+      <div class="toolbar"><button type="button" class="btn small" data-act="syncnow">Sincronizar agora</button><button type="button" class="btn small ghost" data-act="logout">Sair</button></div></div>` + prefsCards() + dadosCard();
   }
   return head + `<div class="card stack"><div class="meal-name">Usando sem conta</div><div class="small muted">Os dados ficam só neste aparelho. Com uma conta, o plano, as metas, o progresso e as fotos ficam iguais no celular e no PC.</div>
     <div class="toolbar"><a class="btn small" href="#entrar">Entrar</a><a class="btn small ghost" href="#criar-conta">Criar conta</a></div></div>` + prefsCards() + dadosCard();
@@ -1452,7 +1420,7 @@ async function initAuth() {
     UI.auth.ready = true;
     if (event === 'PASSWORD_RECOVERY') UI.auth.recovery = true;
     UI.auth.user = session ? session.user : null;
-    if (UI.auth.user && UI.auth.user.id !== before) setTimeout(() => { pull(); fetchTreinos(); }, 0);
+    if (UI.auth.user && UI.auth.user.id !== before) setTimeout(() => pull(), 0);
     if (!UI.auth.user) setSync('');
     render();
   });
@@ -1612,6 +1580,7 @@ function historyDays() {
   return out;
 }
 async function exportHistory() {
+  await fetchTreinos(true); /* treinos do TreinoHoje só entram na planilha */
   const days = historyDays();
   if (!days.length) { toast('Ainda não há histórico para exportar'); return; }
   try {
@@ -2022,8 +1991,7 @@ const ACT = {
   /* Conta */
   skipauth: () => { try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* ignore */ } UI.auth.msg = ''; UI.auth.info = ''; location.hash = '#hoje'; render(); },
   logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } markSynced(0); markRemote(''); UI.photos = {}; await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
-  syncnow: async () => { await pull(); await fetchTreinos(true); toast(UI.sync || 'Sincronizado'); },
-  treinosync: () => fetchTreinos(true),
+  syncnow: async () => { await pull(); toast(UI.sync || 'Sincronizado'); },
   update: () => { if (swWaiting) { swReload = true; swWaiting.postMessage('skip'); } }
 };
 

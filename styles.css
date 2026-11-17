@@ -429,10 +429,6 @@ button.pd-day { cursor: pointer; }
 .rev-btn.ghost:disabled { opacity: .35; }
 .rev-btn.ghost svg { width: 16px; height: 16px; }
 .pd-day { position: relative; }
-.pd-tr { position: absolute; bottom: 4px; left: 50%; width: 14px; margin-left: -7px; height: 3px; border-radius: 2px; background: currentColor; }
-.pd-legend .lg-tr { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--pri-text); }
-.pd-treino { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--soft); color: var(--pri-text); border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
-.pd-treino span { font-size: 12px; font-weight: 500; opacity: .8; }
 .list-btns { display: flex; flex-direction: column; }
 .row-btn { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); text-align: left; font-size: 15px; cursor: pointer; }
 .row-btn:first-child { border-top: 0; }
