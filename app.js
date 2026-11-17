@@ -207,7 +207,7 @@ const UI = {
   pick: null,
   day: null,
   wk: 0,
-  prog: 'corpo',
+  prog: 'comida',
   pw: 4,
   pday: null,
   pcell: null,
@@ -1014,7 +1014,7 @@ function viewProgresso() {
   }).filter(Boolean);
   const canPhoto = !!(sb && UI.auth.user);
   const comida = UI.prog === 'comida';
-  const tabs = `<div class="pill prog-tabs" role="group" aria-label="O que ver"><button type="button" data-act="prog" data-v="corpo" aria-pressed="${!comida}">Corpo</button><button type="button" data-act="prog" data-v="comida" aria-pressed="${comida}">Alimentação</button></div>`;
+  const tabs = `<div class="pill prog-tabs" role="group" aria-label="O que ver"><button type="button" data-act="prog" data-v="comida" aria-pressed="${comida}">Alimentação</button><button type="button" data-act="prog" data-v="corpo" aria-pressed="${!comida}">Corpo</button></div>`;
   if (comida) return header('Progresso', 'Dias fora da meta e os padrões') + tabs + viewAlimentacao();
   return header('Progresso', 'Check-in uma vez por semana, em jejum') + tabs + `<div class="split"><div class="col">
     ${hintCard()}
