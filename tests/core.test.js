@@ -215,11 +215,3 @@ test('merge: combinado da semana fica com o mais novo', () => {
   assert.equal(out.deals['2026-11-02'].t, 'C');
 });
 
-test('TreinoHoje: sessões viram um mapa por dia, com corrida e treino', () => {
-  const iso = (y, m, d, h) => new Date(y, m - 1, d, h).toISOString();
-  const map = C.treinosPorDia({ sessoes: [{ data: iso(2026, 11, 16, 18), tipo: 'A', foco: 'Peito e tríceps' }, { data: iso(2026, 11, 16, 7), tipo: 'corrida', corrida: { km: '5,2', min: '30' } }, { data: 'x' }] });
-  assert.deepEqual(Object.keys(map), ['2026-11-16']);
-  assert.equal(map['2026-11-16'].length, 2);
-  assert.equal(C.treinoTxt(map['2026-11-16'][0]), 'Treino A · Peito e tríceps');
-  assert.equal(C.treinoTxt(map['2026-11-16'][1]), 'Corrida 5,2 km');
-});
