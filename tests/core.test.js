@@ -177,3 +177,40 @@ test('banco de alimentos: novos itens e unidade (g ou ml)', () => {
   assert.ok(!FOODS.isLiquid('Leite em pó integral'));
   assert.ok(!FOODS.isLiquid('Açaí polpa sem açúcar'));
 });
+
+test('padrões: refeição não marcada conta como não feita e o dia fica abaixo', () => {
+  const s = base({ days: { [D]: { done: { cafe: true } } } });
+  const r = C.dayReview(s, D);
+  assert.equal(r.kcal, 300);
+  assert.equal(r.st, 'under');
+  assert.equal(r.cause, 'pulou');
+  assert.deepEqual(r.missed, ['almoco']);
+  assert.deepEqual(r.cells, [{ meal: 'almoco', kind: 'under' }]);
+});
+
+test('padrões: excesso pega a causa que mais pesou (categoria da anotação ou bebida)', () => {
+  const s = base({
+    goals: { kcal: 900 },
+    days: { [D]: { done: { cafe: true, almoco: true }, notes: { almoco: [{ type: 'extra', cat: 'doce', kcal: 520 }], _fora: [{ type: 'extra', kcal: 100 }] } } },
+    drinks: [{ id: 'b', date: D, cups: 1, ml: 350, kcal: 150 }]
+  });
+  const r = C.dayReview(s, D);
+  assert.equal(r.st, 'over');
+  assert.equal(r.cause, 'doce');
+  assert.equal(r.over.bebida, 150);
+  assert.equal(r.over.outro, 100);
+  assert.ok(r.cells.some((c) => c.meal === 'almoco' && c.kind === 'over'));
+});
+
+test('padrões: refeição livre não conta como excesso', () => {
+  const s = base({ days: { [D]: { done: { cafe: true }, notes: { almoco: [{ type: 'livre', kcal: 2500 }] } } } });
+  const r = C.dayReview(s, D);
+  assert.equal(r.st, 'livre');
+  assert.equal(r.cause, 'livre');
+});
+
+test('merge: combinado da semana fica com o mais novo', () => {
+  const out = C.mergeStates(base({ deals: { '2026-11-09': { t: 'A', u: 5 } } }), base({ deals: { '2026-11-09': { t: 'B', u: 3 }, '2026-11-02': { t: 'C', u: 1 } } }));
+  assert.equal(out.deals['2026-11-09'].t, 'A');
+  assert.equal(out.deals['2026-11-02'].t, 'C');
+});

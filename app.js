@@ -62,7 +62,7 @@ const DRINKS = {
 /* Lista de compras: modo auto (pelas opções comidas nas últimas 2 semanas) ou manual; dia da semana das compras (0 = domingo, -1 = sem dia) */
 const DEFAULT_SHOP = { mode: 'auto', day: 6, days: 7, opt: {} };
 function defaultState() {
-  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, planU: 0, rulesU: 0, goalsU: 0, shop: { ...DEFAULT_SHOP }, shopU: 0 };
+  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, deals: {}, planU: 0, rulesU: 0, goalsU: 0, shop: { ...DEFAULT_SHOP }, shopU: 0 };
 }
 function normalizeState(x) {
   const d = defaultState();
@@ -74,7 +74,7 @@ function normalizeState(x) {
     rules: Array.isArray(x.rules) ? x.rules : d.rules,
     shop: { ...d.shop, ...(x.shop || {}) },
     mig: x.mig || {},
-    days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {},
+    days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {}, deals: x.deals || {},
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
   };
@@ -185,6 +185,11 @@ const UI = {
   pick: null,
   day: null,
   wk: 0,
+  prog: 'corpo',
+  pw: 4,
+  pday: null,
+  pcell: null,
+  dealEdit: false,
   pt: null,
   flash: null,
   photos: {},
@@ -304,6 +309,9 @@ function releaseFree(k) {
 }
 const NOTE_TYPES = { troca: 'Comi outra coisa', extra: 'Comi a mais', livre: 'Refeição livre' };
 const NOTE_SHORT = { troca: 'Troca', extra: 'A mais', livre: 'Refeição livre' };
+/* Categoria obrigatória de "comi a mais": é ela que mostra o padrão em Progresso › Alimentação */
+const NOTE_CATS = { doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior' };
+const catTxt = (n) => (n.type === 'extra' && NOTE_CATS[n.cat] ? ' (' + NOTE_CATS[n.cat].toLowerCase() + ')' : '');
 /* Versões das funções do core.js presas ao estado atual */
 const notesOf = (k, mid) => Core.notesOf(S, k, mid);
 const optIndex = (meal, k = todayKey()) => Core.optIndex(S, meal, k);
@@ -572,13 +580,14 @@ function mealCard(m, k, next) {
 function notesList(k, mid) {
   const ns = notesOf(k, mid);
   if (!ns.length) return '';
-  return `<ul class="notes">${ns.map((n) => `<li class="note ${n.type}"><span><strong>${NOTE_SHORT[n.type] || 'Anotação'}:</strong> ${esc(n.text || 'sem descrição')}${num(n.kcal) ? ` · ≈ ${nf(n.kcal)} kcal` : ''}${num(n.p) ? ` · P ${nf(n.p)} g` : ''}</span><button type="button" class="del-btn" data-act="notedel" data-meal="${esc(mid)}" data-id="${esc(n.id)}" aria-label="Apagar anotação">${I.x}</button></li>`).join('')}</ul>`;
+  return `<ul class="notes">${ns.map((n) => `<li class="note ${n.type}"><span><strong>${NOTE_SHORT[n.type] || 'Anotação'}${esc(catTxt(n))}:</strong> ${esc(n.text || 'sem descrição')}${num(n.kcal) ? ` · ≈ ${nf(n.kcal)} kcal` : ''}${num(n.p) ? ` · P ${nf(n.p)} g` : ''}</span><button type="button" class="del-btn" data-act="notedel" data-meal="${esc(mid)}" data-id="${esc(n.id)}" aria-label="Apagar anotação">${I.x}</button></li>`).join('')}</ul>`;
 }
 function noteEditor(withTypes) {
   const N = UI.note;
   const picking = UI.pick && UI.pick.ctx === 'note';
   return `<div class="note-editor" role="group" aria-label="Anotar refeição">
     ${withTypes ? `<div class="chips">${Object.keys(NOTE_TYPES).map((t) => `<button type="button" class="chip small-chip ${N.type === t ? 'on' : ''}" aria-pressed="${N.type === t}" data-act="notetype" data-v="${t}">${NOTE_TYPES[t]}</button>`).join('')}</div>` : ''}
+    ${N.type === 'extra' ? `<div class="stack" style="gap:6px"><span class="field">O que foi</span><div class="chips" role="group" aria-label="Categoria">${Object.keys(NOTE_CATS).map((c) => `<button type="button" class="chip small-chip ${N.cat === c ? 'on' : ''}" aria-pressed="${N.cat === c}" data-act="notecat" data-v="${c}">${NOTE_CATS[c]}</button>`).join('')}</div></div>` : ''}
     <label class="field">O que você comeu<textarea class="input" id="note-text" data-in="note" data-f="text" rows="2" placeholder="${N.type === 'extra' ? 'ex.: 2 bombons' : 'ex.: 2 fatias de pizza de calabresa'}">${esc(N.text)}</textarea></label>
     ${picking ? foodPicker() : `<button type="button" class="btn dashed" data-act="pickopen" data-v="note">${I.busca} Buscar no banco de alimentos</button>`}
     ${N.items && N.items.length ? `<div class="small muted">Do banco: ${esc(N.items.map((i) => i.food + ' ' + i.qty).join(' · '))}</div>` : ''}
@@ -790,6 +799,163 @@ function photosCard() {
     <details class="more"><summary>Todas as fotos <span class="muted">· ${withPh.reduce((a, c) => a + c.fotos.length, 0)}</span></summary>
       <div class="photo-grid">${withPh.slice().reverse().flatMap((c) => c.fotos.map((f) => `<div class="photo-item">${img(f, ddmm(c.date))}<button type="button" class="del-btn" data-act="delphoto" data-date="${c.date}" data-path="${esc(f)}" aria-label="Apagar foto de ${ddmm(c.date)}">${I.x}</button></div>`)).join('')}</div></details></section>`;
 }
+/* ---------- Progresso › Alimentação: dias fora da meta e padrões ----------
+   Só julga dias passados, a partir do primeiro dia com registro. Refeição não marcada conta como não feita. */
+const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo' };
+const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼' };
+const WD_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const sgnK = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n));
+function setDeal(t) {
+  S.deals = S.deals || {};
+  S.deals[weekStart()] = { t: String(t).slice(0, 80), u: Date.now() };
+  UI.dealEdit = false;
+  save(); toast('Combinado salvo');
+}
+function firstLogDay() {
+  const ks = Object.keys(S.days).filter((k) => Core.hasLog(S, k)).concat(S.drinks.map((d) => d.date)).sort();
+  return ks[0] || null;
+}
+function reviewRange(weeks) {
+  const t = todayKey();
+  const start = addDays(weekStart(t), -7 * (weeks - 1));
+  const first = firstLogDay();
+  const out = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const k = addDays(start, i);
+    out.push({ k, i, r: first && k >= first && k < t ? Core.dayReview(S, k) : null, today: k === t });
+  }
+  return out;
+}
+const causeTxt = (c) => (Core.CAUSES[c] || 'Fora da meta');
+/* O que aconteceu no dia, em linhas curtas, a partir das anotações, bebidas e refeições não feitas */
+function dayLines(k, r) {
+  const out = [];
+  mealsOfDay(k).forEach((m) => notesOf(k, m.id).forEach((n) => out.push(m.name + ' · ' + (NOTE_SHORT[n.type] || 'Anotação') + catTxt(n) + ': ' + (n.text || 'sem descrição') + (num(n.kcal) ? ' (≈ ' + nf(n.kcal) + ' kcal)' : ''))));
+  notesOf(k, FORA).forEach((n) => out.push('Fora das refeições · ' + (NOTE_SHORT[n.type] || 'Anotação') + catTxt(n) + ': ' + (n.text || 'sem descrição') + (num(n.kcal) ? ' (≈ ' + nf(n.kcal) + ' kcal)' : '')));
+  S.drinks.filter((d) => d.date === k).forEach((d) => out.push('Bebida alcoólica · ' + ((DRINKS[d.type] || {}).label || d.type) + ' ' + nf(d.cups * d.ml) + ' ml (≈ ' + nf(d.kcal) + ' kcal)'));
+  if (r && r.missed.length) out.push('Não feito: ' + r.missed.join(', '));
+  return out;
+}
+function pdDayCard(cells) {
+  const pick = cells.find((c) => c.k === UI.pday && c.r) || cells.slice().reverse().find((c) => c.r && c.r.st !== 'ok') || cells.slice().reverse().find((c) => c.r);
+  if (!pick) return '';
+  const r = pick.r;
+  const lines = dayLines(pick.k, r);
+  return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
+    <div class="between" style="align-items:center"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
+    <div><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></div>
+    ${r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
+    ${lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
+    ${pick.k >= addDays(todayKey(), -MAX_BACK) ? `<button type="button" class="btn small" style="align-self:flex-start" data-act="openday" data-k="${pick.k}">Abrir o dia</button>` : ''}
+  </section>`;
+}
+function pdMap(cells) {
+  const rows = sortedPlan().map((m) => ({ id: m.id, name: m.name })).concat([{ id: FORA, name: 'Fora das refeições' }]);
+  const hit = {};
+  cells.forEach((c) => {
+    if (!c.r) return;
+    const seen = new Set();
+    c.r.cells.forEach((x) => {
+      const key = x.meal + '|' + (c.i % 7);
+      if (seen.has(key + x.kind)) return; seen.add(key + x.kind);
+      const h = hit[key] = hit[key] || { over: [], under: [], livre: [] };
+      if (!h[x.kind].includes(c)) h[x.kind].push(c);
+    });
+  });
+  const sel = UI.pcell && hit[UI.pcell] ? UI.pcell : null;
+  const grid = rows.map((row) => `<div class="pd-maprow"><span class="pd-mapname">${esc(row.name)}</span>${WD_SHORT.map((w, j) => {
+    const key = row.id + '|' + j;
+    const h = hit[key];
+    const ov = h ? h.over.length : 0, un = h ? h.under.length : 0, lv = h ? h.livre.length : 0;
+    const n = new Set(h ? h.over.concat(h.under) : []).size;
+    const cls = ov && un ? 'mix' : ov ? 'over' : un ? 'under' : lv ? 'livre' : 'none';
+    const txt = n ? String(n) : lv ? 'L' : '';
+    const aria = n ? n + (n === 1 ? ' falha' : ' falhas') + (lv ? ' e refeição livre' : '') : lv ? 'refeição livre' : 'sem falhas';
+    return `<button type="button" class="pd-cell pd-${cls} ${sel === key ? 'on' : ''}" data-act="pcell" data-v="${esc(key)}" aria-label="${esc(row.name)}, ${w}: ${aria}" ${n || lv ? '' : 'disabled'}>${txt}</button>`;
+  }).join('')}</div>`).join('');
+  let detail = '<div class="small muted">Toque numa casa colorida para ver os dias.</div>';
+  if (sel) {
+    const [mid, j] = sel.split('|');
+    const row = rows.find((x) => x.id === mid);
+    const ds = [...new Set(hit[sel].over.concat(hit[sel].under, hit[sel].livre))].sort((a, b) => b.k.localeCompare(a.k));
+    detail = `<div class="pd-detail"><div style="font-weight:600">${esc(row ? row.name : '')} · ${WD_SHORT[+j]}</div>${ds.map((c) => `<button type="button" class="pd-row" data-act="pday" data-k="${c.k}"><span><strong>${ddmm(c.k)}</strong> <span class="muted">· ${esc(causeTxt(c.r.cause))}</span></span><span class="num pd-t-${c.r.st}">${sgnK(c.r.diff)}</span></button>`).join('')}</div>`;
+  }
+  return `<section class="card stack" aria-label="Mapa das falhas"><div class="between"><h2 class="label">Mapa das falhas</h2><span class="small muted">refeição × dia da semana</span></div>
+    <div class="pd-map"><div class="pd-maprow pd-maphead"><span></span>${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}</div>${grid}</div>
+    <ul class="legend pd-legend"><li><span class="lg pd-over"></span>Comeu a mais</li><li><span class="lg pd-under"></span>Não fez ou fez menos</li><li><span class="lg pd-livre"></span>Refeição livre</li></ul>
+    ${detail}</section>`;
+}
+const DEAL_SUG = { doce: 'Sem doce em casa', bebida: 'Bebida alcoólica em 1 dia só', salgado: 'Jantar pronto antes de sair', porcao: 'Servir o prato uma vez só', outro: 'Anotar antes de comer fora do plano', troca: 'Seguir a opção do plano, sem trocar', menos: 'Comer a porção inteira do plano', semkcal: 'Anotar as calorias das trocas' };
+function pdWeekCard() {
+  const ws = addDays(weekStart(), -7);
+  const first = firstLogDay();
+  if (!first || addDays(ws, 6) < first) return '';
+  const rev = (w) => { const out = []; for (let i = 0; i < 7; i++) { const k = addDays(w, i); if (k >= first && k < todayKey()) out.push(Core.dayReview(S, k)); } return out; };
+  const last = rev(ws), before = rev(addDays(ws, -7));
+  const off = (rs) => rs.filter((r) => r.st === 'over' || r.st === 'under');
+  const cnt = {};
+  off(last).forEach((r) => { cnt[r.cause] = (cnt[r.cause] || 0) + 1; });
+  const causes = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
+  const missed = {};
+  last.forEach((r) => r.missed.forEach((m) => { missed[m] = (missed[m] || 0) + 1; }));
+  const topMiss = Object.entries(missed).sort((a, b) => b[1] - a[1])[0];
+  const sug = [];
+  causes.forEach(([c]) => { const t = c === 'pulou' && topMiss ? 'Deixar ' + topMiss[0].toLowerCase() + ' pronto de manhã' : DEAL_SUG[c]; if (t && !sug.includes(t)) sug.push(t); });
+  ['Fruta se bater vontade à noite'].forEach((t) => { if (sug.length < 3 && !sug.includes(t)) sug.push(t); });
+  const prev = S.deals && S.deals[ws];
+  const now = S.deals && S.deals[weekStart()];
+  const n = off(last).length, nb = off(before).length;
+  const pat = causes.length ? causes.slice(0, 2).map(([c, v]) => `<strong>${esc(causeTxt(c).toLowerCase())}</strong> em ${v} ${v === 1 ? 'dia' : 'dias'}`).join(' e ') : '';
+  return `<section class="card stack" aria-label="Revisão da semana"><div class="between"><h2 class="label">Revisão da semana</h2><span class="small muted">${ddmm(ws)} a ${ddmm(addDays(ws, 6))}</span></div>
+    <div><div class="meal-name">${n ? n + (n === 1 ? ' dia fora da meta' : ' dias fora da meta') : 'Nenhum dia fora da meta'}</div>
+    <div class="small muted">${pat ? 'Padrão da semana: ' + pat + '.' : ''}${before.length ? ` Semana anterior: ${nb} ${nb === 1 ? 'dia' : 'dias'}.` : ''}</div></div>
+    ${prev ? `<div class="pd-deal"><span class="small" style="font-weight:600">Combinado da semana passada</span><span style="font-weight:600">${esc(prev.t)}</span></div>` : ''}
+    <div class="stack" style="gap:8px"><span style="font-weight:600">Combinado para esta semana</span>
+      ${now && !UI.dealEdit ? `<div class="between" style="align-items:center"><span class="pd-deal-now">${esc(now.t)}</span><button type="button" class="tap-link" data-act="dealedit">Trocar</button></div>` : `
+      <div class="chips">${sug.map((t) => `<button type="button" class="chip small-chip" data-act="deal" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+      <div class="row" style="gap:8px"><input class="input" id="deal-text" type="text" maxlength="80" placeholder="Ou escreva o seu" aria-label="Combinado para esta semana" style="flex:1"><button type="button" class="btn small" data-act="dealtext">Salvar</button></div>`}
+      <div class="small muted">Vai junto na exportação do histórico.</div></div>
+  </section>`;
+}
+function viewAlimentacao() {
+  const weeks = UI.pw || 4;
+  const cells = reviewRange(weeks);
+  const rs = cells.filter((c) => c.r).map((c) => c.r);
+  const ws = addDays(weekStart(), UI.wk * 7);
+  const week = `<section class="card stack" aria-label="Resumo da semana"><div class="between" style="align-items:center"><h2 class="label">Semana de ${ddmm(ws)}</h2>
+      <div class="pill small-pill" role="group" aria-label="Qual semana"><button type="button" data-act="wk" data-v="-1" aria-pressed="${UI.wk === -1}">Passada</button><button type="button" data-act="wk" data-v="0" aria-pressed="${UI.wk === 0}">Esta</button></div></div>
+      ${weekSummary(ws)}${weekGrid(ws).html}</section>`;
+  if (!rs.length) return `<div class="col">${week}<section class="card small muted">Os dias fora da meta aparecem aqui a partir de amanhã. Hoje não entra porque ainda não terminou.</section></div>`;
+  const c = (st) => rs.filter((r) => r.st === st).length;
+  const avg = rs.reduce((a, r) => a + r.kcal, 0) / rs.length;
+  const meta = num(S.goals.kcal);
+  const miss = rs.reduce((a, r) => a + r.missed.length, 0);
+  const lo = Math.round(meta * 0.9), hi = Math.round(meta * 1.1);
+  const cal = [];
+  for (let w = 0; w < weeks; w++) {
+    const row = cells.slice(w * 7, w * 7 + 7);
+    const wr = row.filter((x) => x.r).map((x) => x.r);
+    const a = wr.length ? wr.reduce((s2, r) => s2 + r.kcal, 0) / wr.length : null;
+    const acls = a === null ? '' : a > hi ? 'pd-t-over' : a < lo ? 'pd-t-under' : '';
+    cal.push(`<div class="pd-calrow">${row.map((x) => x.r
+      ? `<button type="button" class="pd-day pd-${x.r.st} ${UI.pday === x.k ? 'on' : ''}" data-act="pday" data-k="${x.k}" aria-label="${WD_SHORT[x.i % 7]} ${ddmm(x.k)}: ${nf(x.r.kcal)} kcal, ${PD_TXT[x.r.st].toLowerCase()}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g">${PD_GLYPH[x.r.st]}</span></button>`
+      : `<span class="pd-day pd-none ${x.today ? 'today' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g"></span></span>`).join('')}<span class="pd-avg num ${acls}">${a === null ? '' : nf(a)}</span></div>`);
+  }
+  const summary = `<section class="card stack" aria-label="Dias fora da meta"><div class="between" style="align-items:center"><h2 class="label">Calorias</h2>
+      <div class="pill small-pill" role="group" aria-label="Período"><button type="button" data-act="pw" data-v="4" aria-pressed="${weeks === 4}">4 semanas</button><button type="button" data-act="pw" data-v="8" aria-pressed="${weeks === 8}">8 semanas</button></div></div>
+    <div class="pd-tiles">
+      <div class="pd-tile pd-ok"><span class="num">${c('ok')}</span><span>na meta</span></div>
+      <div class="pd-tile pd-over"><span class="num">▲ ${c('over')}</span><span>acima${c('livre') ? ` <span style="font-weight:500">· +${c('livre')} livre</span>` : ''}</span></div>
+      <div class="pd-tile pd-under"><span class="num">▼ ${c('under')}</span><span>abaixo</span></div>
+      <div class="pd-tile"><span class="num">${miss}</span><span>refeições não feitas</span></div>
+    </div>
+    <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
+    <div class="pd-cal"><div class="pd-calrow pd-calhead">${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}<span class="pd-avg">média</span></div>${cal.join('')}</div>
+    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li></ul>
+  </section>`;
+  const dayCard = pdDayCard(cells);
+  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
+}
 function viewProgresso() {
   const g = S.goals;
   const k = todayKey();
@@ -809,11 +975,11 @@ function viewProgresso() {
     return `<tr><td>${m.label}</td><td>${nf(f[m.id], 1)}</td><td><strong>${nf(l[m.id], 1)}</strong></td><td>${vals.length > 1 ? (d > 0 ? '+' : '') + nf(d, 1) : '—'}</td></tr>`;
   }).filter(Boolean);
   const canPhoto = !!(sb && UI.auth.user);
-  return header('Progresso', 'Check-in uma vez por semana, em jejum') + `<div class="split"><div class="col">
+  const comida = UI.prog === 'comida';
+  const tabs = `<div class="pill prog-tabs" role="group" aria-label="O que ver"><button type="button" data-act="prog" data-v="corpo" aria-pressed="${!comida}">Corpo</button><button type="button" data-act="prog" data-v="comida" aria-pressed="${comida}">Alimentação</button></div>`;
+  if (comida) return header('Progresso', 'Dias fora da meta e os padrões') + tabs + viewAlimentacao();
+  return header('Progresso', 'Check-in uma vez por semana, em jejum') + tabs + `<div class="split"><div class="col">
     ${hintCard()}
-    <section class="card stack" aria-label="Resumo da semana"><div class="between" style="align-items:center"><h2 class="label">Semana de ${ddmm(ws)}</h2>
-      <div class="pill small-pill" role="group" aria-label="Qual semana"><button type="button" data-act="wk" data-v="-1" aria-pressed="${UI.wk === -1}">Passada</button><button type="button" data-act="wk" data-v="0" aria-pressed="${UI.wk === 0}">Esta</button></div></div>
-      ${weekSummary(ws)}${weekGrid(ws).html}</section>
     <section class="card stack" aria-label="Check-in semanal"><div class="meal-name">Check-in semanal</div>
       <div class="grid2"><label class="field">Peso (kg)<input class="input strong" id="ck-peso" type="number" inputmode="decimal" step="0.1" placeholder="${lc ? nf(lc.peso, 1) : '81,0'}"></label>${mIn(MEDIDAS[0])}</div>
       <details class="more"><summary>Outras medidas <span class="muted">· a cada 2 a 4 semanas</span></summary>
@@ -1365,18 +1531,20 @@ async function exportHistory() {
           'Carbo (g)': done && !intake.replaced ? pl.c : '', 'Gordura (g)': done && !intake.replaced ? pl.g : '',
           'Anotações': ns.map((n) => (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '') + (num(n.kcal) ? ' (' + n.kcal + ' kcal' + (num(n.p) ? ', ' + n.p + ' g prot.' : '') + ')' : '')).join(' | ')
         });
-        ns.forEach((n) => { textos.push(m.name + ' – ' + (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': m.name, 'Tipo': NOTE_TYPES[n.type] || n.type, 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
+        ns.forEach((n) => { textos.push(m.name + ' – ' + (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': m.name, 'Tipo': NOTE_TYPES[n.type] || n.type, 'Categoria': NOTE_CATS[n.cat] || '', 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
       });
-      notesOf(k, FORA).forEach((n) => { kAnot += num(n.kcal); p += num(n.p); c += num(n.c); gg += num(n.g); textos.push('Fora das refeições: ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': 'Fora das refeições', 'Tipo': NOTE_TYPES[n.type] || n.type, 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
+      notesOf(k, FORA).forEach((n) => { kAnot += num(n.kcal); p += num(n.p); c += num(n.c); gg += num(n.g); textos.push('Fora das refeições: ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': 'Fora das refeições', 'Tipo': NOTE_TYPES[n.type] || n.type, 'Categoria': NOTE_CATS[n.cat] || '', 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
       const bebidas = S.drinks.filter((x) => x.date === k);
       const kBeb = bebidas.reduce((a, x) => a + num(x.kcal), 0);
       const ck = S.checkins.find((x) => x.date === k);
       const livre = notesOf(k, FORA).concat(...mealsOfDay(k).map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || S.free[weekStart(k)] === k;
       const total = kPlano + kAnot + kBeb;
+      const rv = k < todayKey() ? Core.dayReview(S, k) : null;
       resumo.push({
         'Data': k, 'Dia': dn, 'Refeições feitas': feitas, 'Refeições no plano': S.plan.length,
         'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida alcoólica': Math.round(kBeb), 'kcal total': Math.round(total),
         'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
+        'Situação': rv ? PD_TXT[rv.st] : '', 'Causa principal': rv && rv.cause ? causeTxt(rv.cause) : '', 'Refeições não feitas': rv ? rv.missed.join(', ') : '',
         'Proteína (g)': Math.round(p), 'Carbo (g)': Math.round(c), 'Gordura (g)': Math.round(gg),
         'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
         'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
@@ -1389,7 +1557,10 @@ async function exportHistory() {
       { 'Leia-me': 'kcal do plano: soma das refeições marcadas como feitas, pela opção do plano escolhida no dia.' },
       { 'Leia-me': 'kcal anotadas: estimativas para trocas, comida a mais, refeição livre e beliscos, digitadas ou vindas do banco de alimentos do app (valores aproximados da TACO). Anotação sem kcal fica registrada, mas não soma.' },
       { 'Leia-me': 'Proteína, carbo e gordura: do plano e das anotações que têm esses valores (as do banco de alimentos têm os três; as digitadas, só a proteína, se informada).' },
-      { 'Leia-me': 'Refeição sem marcação (Feita = não) deve ser tratada como pulada: o usuário revisa o dia e marca o que comeu.' },
+      { 'Leia-me': 'Refeição sem marcação (Feita = não) conta como não feita.' },
+      { 'Leia-me': 'Situação: na meta (kcal total dentro de ±10% da meta), acima, abaixo ou refeição livre (prevista no plano, 1 por semana). Hoje fica em branco porque o dia não terminou.' },
+      { 'Leia-me': 'Causa principal: o que mais pesou no dia fora da meta. Acima: categoria da anotação de "comi a mais" (doce, bebida, salgado ou fast food, porção maior), troca mais calórica ou bebida alcoólica. Abaixo: refeição não feita ou porção menor.' },
+      { 'Leia-me': 'Combinados: o que o usuário combinou consigo mesmo para cada semana, na revisão semanal do app.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum. Medidas com fita, sempre do lado direito: cintura no umbigo (semanal); peito na linha dos mamilos, braço contraído no pico do bíceps, coxa logo abaixo do glúteo e quadril no ponto mais largo (a cada 2 a 4 semanas).' }
@@ -1403,11 +1574,12 @@ async function exportHistory() {
     const wb = XLSX.utils.book_new();
     const add = (rows, name, cols) => { const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': 'Sem registros' }]); if (cols) ws['!cols'] = cols.map((w) => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
     add(leia, 'Leia-me', [110]);
-    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 9, 9, 9, 9, 80]);
+    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 14, 26, 30, 10, 10, 10, 9, 9, 9, 9, 9, 9, 80]);
     add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
-    add(anotacoes, 'Anotações', [11, 18, 16, 50, 10, 10, 10, 10]);
+    add(anotacoes, 'Anotações', [11, 18, 16, 18, 50, 10, 10, 10, 10]);
     add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas alcoólicas');
     add(S.checkins.map((x) => ({ 'Data': x.date, 'Peso (kg)': num(x.peso) || '', 'Cintura (cm)': num(x.cintura) || '', 'Peito (cm)': num(x.peito) || '', 'Braço contraído (cm)': num(x.braco) || '', 'Coxa (cm)': num(x.coxa) || '', 'Quadril (cm)': num(x.quadril) || '', 'Fotos': (x.fotos || []).length || '' })), 'Check-ins e medidas');
+    add(Object.entries(S.deals || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([w, v]) => ({ 'Semana (segunda)': w, 'Combinado': v.t })), 'Combinados', [16, 60]);
     add(metas, 'Metas', [20, 12]);
     add(plano, 'Plano atual', [16, 8, 28, 32, 18, 6, 12, 10, 12]);
     XLSX.writeFile(wb, 'personalnutri-historico-' + todayKey() + '.xlsx');
@@ -1508,12 +1680,15 @@ const ACT = {
   },
   noteopen: (el) => { UI.note = { meal: el.dataset.meal, type: el.dataset.meal === FORA ? 'extra' : 'troca', text: '', kcal: '', p: '', c: '', g: '', items: [] }; UI.pick = null; render(); const t = document.getElementById('note-text'); if (t) t.focus(); },
   notetype: (el) => { UI.note.type = el.dataset.v; render(); },
+  notecat: (el) => { UI.note.cat = el.dataset.v; render(); },
   notecancel: () => { UI.note = null; UI.pick = null; render(); },
   notesave: () => {
     const N = UI.note; if (!N) return;
     if (!String(N.text).trim() && !num(N.kcal)) { toast('Escreva o que comeu ou as calorias'); return; }
+    if (N.type === 'extra' && !NOTE_CATS[N.cat]) { toast('Escolha o que foi: doce, bebida, salgado ou porção maior'); return; }
     const k = curDay(); const d = dayRec(k);
     const note = { id: uid(), type: N.type, text: String(N.text).trim(), kcal: num(N.kcal) || '', at: new Date().toISOString() };
+    if (N.type === 'extra') note.cat = N.cat;
     if (num(N.p)) note.p = num(N.p);
     if (N.items && N.items.length) { if (num(N.c)) note.c = num(N.c); if (num(N.g)) note.g = num(N.g); }
     (d.notes[N.meal] = d.notes[N.meal] || []).push(note);
@@ -1566,6 +1741,14 @@ const ACT = {
   },
   exporthist: () => exportHistory(),
   histall: () => { UI.histAll = !UI.histAll; render(); },
+  prog: (el) => { UI.prog = el.dataset.v; render(); },
+  pw: (el) => { UI.pw = +el.dataset.v; render(); },
+  pday: (el) => { UI.pday = el.dataset.k; render(); if (!matchMedia('(min-width: 900px)').matches) { const c = document.querySelector('.only-mobile .pd-sel'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); } },
+  pcell: (el) => { UI.pcell = UI.pcell === el.dataset.v ? null : el.dataset.v; render(); },
+  openday: (el) => { UI.day = el.dataset.k; location.hash = '#hoje'; },
+  deal: (el) => setDeal(el.dataset.v),
+  dealtext: () => { const i = document.getElementById('deal-text'); const t = i ? i.value.trim() : ''; if (!t) { toast('Escreva o combinado'); return; } setDeal(t); },
+  dealedit: () => { UI.dealEdit = true; render(); },
   day: (el) => changeDay(+el.dataset.v),
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {
