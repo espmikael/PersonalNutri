@@ -190,6 +190,7 @@ const UI = {
   pday: null,
   pcell: null,
   dealEdit: false,
+  review: null,
   pt: null,
   flash: null,
   photos: {},
@@ -219,7 +220,7 @@ function changeDay(v) {
   const next = v === 0 ? t : addDays(curDay(), v);
   if (next > t || next < addDays(t, -MAX_BACK)) return;
   UI.day = next;
-  UI.note = null; UI.pick = null;
+  UI.note = null; UI.pick = null; UI.review = null;
   render();
 }
 
@@ -636,6 +637,16 @@ function repeatable(k) {
   if (doneCount(k) > 0) return [];
   return S.plan.filter((m) => isDone(m, prev) && !notesOf(prev, m.id).some((n) => n.type === 'troca' || n.type === 'livre'));
 }
+/* Faixa da revisão em sequência dos dias fora da meta (aberta pelo card em Progresso › Alimentação) */
+function reviewBanner(k) {
+  const R = UI.review;
+  if (!R || R.list[R.at] !== k) return '';
+  const last = R.at === R.list.length - 1;
+  return `<div class="rev-bar" role="region" aria-label="Revisando dias fora da meta"><div class="rev-txt"><span>Revisando dias fora da meta</span><strong>${R.at + 1} de ${R.list.length}</strong></div>
+    <button type="button" class="rev-btn ghost" data-act="revgo" data-v="-1" aria-label="Dia anterior da revisão" ${R.at ? '' : 'disabled'}>‹</button>
+    <button type="button" class="rev-btn" data-act="revgo" data-v="1">${last ? 'Concluir' : 'Próximo ›'}</button>
+    <button type="button" class="rev-btn ghost" data-act="revstop" aria-label="Parar a revisão">${I.x}</button></div>`;
+}
 function viewHoje() {
   const k = curDay();
   const ws = weekStart(k);
@@ -661,7 +672,7 @@ function viewHoje() {
   </div>`;
   const nextId = nextMealId(k);
   const meals = sortedPlan().map((m) => mealCard(m, k, m.id === nextId)).join('') + mealsOfDay(k).filter((m) => m.orphan).map((m) => mealCard(m, k, false)).join('') + (S.plan.length ? foraCard(k) : '');
-  return header(dayTitle(k), dayNav(k)) + (isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
+  return reviewBanner(k) + header(dayTitle(k), dayNav(k)) + (UI.review || isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
     `<div class="split"><div class="col"><div class="only-mobile col">${shopTodayCard(k)}${heroCard(k)}${repBtn}${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}<div class="only-mobile col">${lastWeek}${rulesCard(ws)}</div></div>${side}</div>`;
 }
 
@@ -836,14 +847,22 @@ function dayLines(k, r) {
   if (r && r.missed.length) out.push('Não feito: ' + r.missed.join(', '));
   return out;
 }
+/* Fila de dias fora da meta (acima ou abaixo; refeição livre não entra), do mais recente para o mais antigo */
+const offQueue = (cells) => cells.filter((c) => c.r && (c.r.st === 'over' || c.r.st === 'under')).map((c) => c.k).reverse();
 function pdDayCard(cells) {
-  const pick = cells.find((c) => c.k === UI.pday && c.r) || cells.slice().reverse().find((c) => c.r && c.r.st !== 'ok') || cells.slice().reverse().find((c) => c.r);
+  const q = offQueue(cells);
+  /* Sem escolha do usuário, mostra sempre o dia fora da meta mais recente */
+  const pick = cells.find((c) => c.k === UI.pday && c.r) || cells.find((c) => c.k === q[0]) || cells.slice().reverse().find((c) => c.r);
   if (!pick) return '';
   const r = pick.r;
   const lines = dayLines(pick.k, r);
+  const pos = q.indexOf(pick.k);
+  const newer = pos > 0 ? q[pos - 1] : pos === -1 ? q.slice().reverse().find((k) => k > pick.k) : null;
+  const older = pos >= 0 ? q[pos + 1] : q.find((k) => k < pick.k);
+  const arrow = (k, lbl, ch) => `<button type="button" class="pd-arrow" data-act="pday" data-k="${k || ''}" aria-label="${lbl}" ${k ? '' : 'disabled'}>${ch}</button>`;
   return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
-    <div class="between" style="align-items:center"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
-    <div><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></div>
+    <div class="pd-selhead">${arrow(newer, 'Dia fora da meta mais recente', '‹')}<div class="pd-seltitle"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="small muted" style="font-weight:600">${pos >= 0 ? `${pos + 1} de ${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : q.length ? `${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : 'Nenhum dia fora da meta'}</span></div>${arrow(older, 'Dia fora da meta mais antigo', '›')}</div>
+    <div class="between" style="align-items:baseline"><span><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
     ${r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
     ${lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
     ${pick.k >= addDays(todayKey(), -MAX_BACK) ? `<button type="button" class="btn small" style="align-self:flex-start" data-act="openday" data-k="${pick.k}">Abrir o dia</button>` : ''}
@@ -1745,7 +1764,20 @@ const ACT = {
   pw: (el) => { UI.pw = +el.dataset.v; render(); },
   pday: (el) => { UI.pday = el.dataset.k; render(); if (!matchMedia('(min-width: 900px)').matches) { const c = document.querySelector('.only-mobile .pd-sel'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); } },
   pcell: (el) => { UI.pcell = UI.pcell === el.dataset.v ? null : el.dataset.v; render(); },
-  openday: (el) => { UI.day = el.dataset.k; location.hash = '#hoje'; },
+  openday: (el) => {
+    const q = offQueue(reviewRange(UI.pw || 4)).filter((k) => k >= addDays(todayKey(), -MAX_BACK));
+    const at = q.indexOf(el.dataset.k);
+    UI.review = at >= 0 && q.length > 1 ? { list: q, at } : null;
+    UI.day = el.dataset.k; location.hash = '#hoje';
+  },
+  revgo: (el) => {
+    const R = UI.review; if (!R) return;
+    const at = R.at + +el.dataset.v;
+    if (at >= R.list.length) { UI.review = null; UI.pday = null; location.hash = '#progresso'; return; }
+    if (at < 0) return;
+    R.at = at; UI.day = R.list[at]; UI.note = null; UI.pick = null; render(); window.scrollTo(0, 0);
+  },
+  revstop: () => { UI.review = null; render(); },
   deal: (el) => setDeal(el.dataset.v),
   dealtext: () => { const i = document.getElementById('deal-text'); const t = i ? i.value.trim() : ''; if (!t) { toast('Escreva o combinado'); return; } setDeal(t); },
   dealedit: () => { UI.dealEdit = true; render(); },
@@ -1934,7 +1966,8 @@ document.getElementById('file-import').addEventListener('change', (e) => {
 });
 window.addEventListener('hashchange', () => {
   const n = route().name;
-  if (n !== 'refeicao' && n !== 'hoje' && n !== 'macros') UI.day = null;
+  if (n !== 'refeicao' && n !== 'hoje' && n !== 'macros') { UI.day = null; UI.review = null; }
+  if (n === 'progresso') UI.pday = null;
   UI.note = null; UI.pick = null; UI.pt = null;
   render(); window.scrollTo(0, 0);
 });
