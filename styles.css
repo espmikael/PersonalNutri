@@ -36,7 +36,7 @@ input[type=number] { -moz-appearance: textfield; }
 .sidebar { display: none; }
 .main { flex: 1; min-width: 0; }
 .content { max-width: 640px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 20px calc(110px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
-.tabbar { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); z-index: 10; }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--card); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); z-index: 10; }
 .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 48px; text-decoration: none; color: var(--muted); font-size: 11px; font-weight: 500; }
 .tab.on { color: var(--pri-text); font-weight: 600; }
 .only-desktop { display: none !important; }
