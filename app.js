@@ -163,6 +163,25 @@ const REMIND_KEY = 'personalnutri_lembretes';
 const SHOP_KEY = 'personalnutri_compras';
 const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch (e) { return fb; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* armazenamento bloqueado */ } };
+/* Treinos lidos do TreinoHoje (mesma conta, mesmo Supabase). Só leitura: o PersonalNutri nunca grava lá. */
+const TREINO_KEY = 'personalnutri_treinos';
+const TREINO_TABLE = 'treinohoje';
+let TREINOS = lsGet(TREINO_KEY, null);
+const treinosDe = (k) => (TREINOS && TREINOS.days && TREINOS.days[k]) || [];
+async function fetchTreinos(force) {
+  if (!sb || !UI.auth.user) return;
+  if (!force && TREINOS && TREINOS.uid === UI.auth.user.id && Date.now() - (TREINOS.at || 0) < 10 * 60000) return;
+  try {
+    const { data, error } = await sb.from(TREINO_TABLE).select('dados').eq('user_id', UI.auth.user.id).maybeSingle();
+    if (error) throw error;
+    const days = data ? Core.treinosPorDia(data.dados) : {};
+    TREINOS = { uid: UI.auth.user.id, at: Date.now(), found: !!data, days };
+  } catch (e) {
+    TREINOS = { ...(TREINOS || {}), uid: UI.auth.user.id, at: Date.now(), err: (e && e.message) || 'erro' };
+  }
+  lsSet(TREINO_KEY, TREINOS);
+  render();
+}
 
 /* ---------- Estado ---------- */
 let S = loadLocal();
@@ -178,6 +197,10 @@ if (lsGet(THEME_KEY, null) === null) lsSet(THEME_KEY, PREF.theme);
 delete S.theme;
 const UI = {
   plano: { meal: 0, opt: {} },
+  planTab: 'refeicoes',
+  metasOpen: false,
+  shopEdit: null,
+  shopAdd: false,
   drink: { type: 'cerveja', cups: 1, ml: DRINKS.cerveja.ml },
   auth: { user: null, ready: false, msg: '', info: '', busy: false, recovery: false, f: {} },
   sync: '',
@@ -352,14 +375,16 @@ const I = {
   back: svg('<path d="M15 5l-7 7 7 7"/>', 18),
   check: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`,
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>', 16),
+  chev: svg('<path d="M9 6l6 6-6 6"/>', 18),
+  lapis: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>', 16),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 18),
   brand: svg('<path d="M3 3v4.5a1.5 1.5 0 0 0 3 0V3M4.5 9v12"/><path d="M21 3c-1.6 1-2.2 3-2.2 6.5H21V21"/><circle cx="12" cy="12" r="5"/><path d="M9.6 13.2h4.8M10.2 13.2a1.8 1.8 0 0 1 3.6 0"/>', 20),
   brandBig: svg('<path d="M3 3v4.5a1.5 1.5 0 0 0 3 0V3M4.5 9v12"/><path d="M21 3c-1.6 1-2.2 3-2.2 6.5H21V21"/><circle cx="12" cy="12" r="5"/><path d="M9.6 13.2h4.8M10.2 13.2a1.8 1.8 0 0 1 3.6 0"/>', 30)
 };
 
 /* ---------- Estrutura ---------- */
-const TABS = [['hoje', 'Hoje'], ['progresso', 'Progresso'], ['plano', 'Plano'], ['compras', 'Compras'], ['extras', 'Extras']];
-const SIDE = [['hoje', 'Hoje'], ['macros', 'Macros'], ['progresso', 'Progresso'], ['extras', 'Extras'], ['plano', 'Plano'], ['compras', 'Compras']];
+const TABS = [['hoje', 'Hoje'], ['progresso', 'Progresso'], ['plano', 'Plano']];
+const SIDE = [['hoje', 'Hoje'], ['macros', 'Macros'], ['progresso', 'Progresso'], ['plano', 'Plano']];
 function route() {
   const h = (location.hash || '#hoje').slice(1).split('/');
   return { name: h[0] || 'hoje', arg: h[1] ? decodeURIComponent(h[1]) : '' };
@@ -407,9 +432,12 @@ function render() {
   if (AUTH_ROUTES.includes(r.name)) { $app.innerHTML = authView(r.name); return; }
   const offlineSession = !navigator.onLine && hasStoredSession();
   if (sb && !UI.auth.user && !offlineSession && !skipAuth()) { $app.innerHTML = authView('entrar'); return; }
-  const views = { hoje: viewHoje, refeicao: viewRefeicao, macros: viewMacros, extras: viewExtras, progresso: viewProgresso, plano: viewPlano, compras: viewCompras, conta: viewConta };
+  /* Endereços antigos: Compras virou parte de Plano e Extras foi para "Fora das refeições", em Hoje */
+  if (r.name === 'compras') { UI.planTab = 'compras'; location.replace('#plano'); return; }
+  if (r.name === 'extras') { location.replace('#hoje'); return; }
+  const views = { hoje: viewHoje, refeicao: viewRefeicao, macros: viewMacros, progresso: viewProgresso, plano: viewPlano, conta: viewConta };
   const fn = views[r.name] || viewHoje;
-  const narrow = ['refeicao', 'extras', 'conta', 'compras'].includes(r.name) ? ' narrow' : '';
+  const narrow = ['refeicao', 'conta'].includes(r.name) || (r.name === 'plano' && UI.planTab === 'compras') ? ' narrow' : '';
   const key = r.name + '/' + r.arg;
   const enter = key !== UI.lastRoute ? ' enter' : '';
   UI.lastRoute = key;
@@ -586,8 +614,10 @@ function notesList(k, mid) {
 function noteEditor(withTypes) {
   const N = UI.note;
   const picking = UI.pick && UI.pick.ctx === 'note';
+  if (N.type === 'bebida') return `<div class="note-editor" role="group" aria-label="Anotar bebida alcoólica"><div class="chips">${Object.keys(FORA_TYPES).map((t) => `<button type="button" class="chip small-chip ${N.type === t ? 'on' : ''}" aria-pressed="${N.type === t}" data-act="notetype" data-v="${t}">${FORA_TYPES[t]}</button>`).join('')}</div>${drinkForm()}</div>`;
   return `<div class="note-editor" role="group" aria-label="Anotar refeição">
-    ${withTypes ? `<div class="chips">${Object.keys(NOTE_TYPES).map((t) => `<button type="button" class="chip small-chip ${N.type === t ? 'on' : ''}" aria-pressed="${N.type === t}" data-act="notetype" data-v="${t}">${NOTE_TYPES[t]}</button>`).join('')}</div>` : ''}
+    ${withTypes ? (() => { const T = N.meal === FORA ? FORA_TYPES : NOTE_TYPES; return `<div class="chips">${Object.keys(T).map((t) => `<button type="button" class="chip small-chip ${N.type === t ? 'on' : ''}" aria-pressed="${N.type === t}" data-act="notetype" data-v="${t}">${T[t]}</button>`).join('')}</div>`; })() : ''}
+
     ${N.type === 'extra' ? `<div class="stack" style="gap:6px"><span class="field">O que foi</span><div class="chips" role="group" aria-label="Categoria">${Object.keys(NOTE_CATS).map((c) => `<button type="button" class="chip small-chip ${N.cat === c ? 'on' : ''}" aria-pressed="${N.cat === c}" data-act="notecat" data-v="${c}">${NOTE_CATS[c]}</button>`).join('')}</div></div>` : ''}
     <label class="field">O que você comeu<textarea class="input" id="note-text" data-in="note" data-f="text" rows="2" placeholder="${N.type === 'extra' ? 'ex.: 2 bombons' : 'ex.: 2 fatias de pizza de calabresa'}">${esc(N.text)}</textarea></label>
     ${picking ? foodPicker() : `<button type="button" class="btn dashed" data-act="pickopen" data-v="note">${I.busca} Buscar no banco de alimentos</button>`}
@@ -599,13 +629,30 @@ function noteEditor(withTypes) {
     <div class="toolbar"><button type="button" class="btn small" data-act="notesave">Salvar</button><button type="button" class="btn small ghost" data-act="notecancel">Cancelar</button></div>
   </div>`;
 }
+function foraDrinks(k) {
+  const ds = S.drinks.filter((d) => d.date === k);
+  if (!ds.length) return '';
+  return `<ul class="notes">${ds.map((d) => `<li class="note extra"><span><strong>Bebida alcoólica:</strong> ${d.cups} × ${d.ml} ml de ${esc(((DRINKS[d.type] || {}).label || d.type).toLowerCase())} · ≈ ${nf(d.kcal)} kcal</span><button type="button" class="del-btn" data-act="deldrink" data-id="${esc(d.id)}" aria-label="Apagar bebida">${I.x}</button></li>`).join('')}</ul>`;
+}
+const FORA_TYPES = { extra: 'Comi a mais', bebida: 'Bebida alcoólica', livre: 'Refeição livre' };
+function drinkForm() {
+  const D = UI.drink;
+  return `<div class="grid4">${Object.keys(DRINKS).map((id) => `<button type="button" class="chip o small-chip ${id === D.type ? 'on' : ''}" style="padding:0 4px;border-radius:12px" aria-pressed="${id === D.type}" data-act="drinktype" data-v="${id}">${DRINKS[id].label}</button>`).join('')}</div>
+    <div class="grid2">
+      <div class="field">Copos<div class="stepper"><button type="button" data-act="cups" data-v="-1" aria-label="Menos copos">−</button><span class="num">${D.cups}</span><button type="button" data-act="cups" data-v="1" aria-label="Mais copos">+</button></div></div>
+      <div class="field">ml por copo<div class="stepper"><button type="button" data-act="ml" data-v="-1" aria-label="Menos ml">−</button><span class="num">${D.ml}</span><button type="button" data-act="ml" data-v="1" aria-label="Mais ml">+</button></div></div>
+    </div>
+    <div class="drink-total"><span>${D.cups} × ${D.ml} ml = ${nf(D.cups * D.ml)} ml</span><span class="num">≈ ${nf(drinkKcal(D.type, D.cups, D.ml))} kcal</span></div>
+    <div class="toolbar"><button type="button" class="btn small orange" data-act="adddrink">Anotar ${DRINKS[D.type].label.toLowerCase()}</button><button type="button" class="btn small ghost" data-act="notecancel">Cancelar</button></div>`;
+}
 function foraCard(k) {
   const open = UI.note && UI.note.meal === FORA;
   return `<article class="card meal" style="align-items:flex-start"><div class="meal-main">
     <div class="meal-head"><span class="meal-name">Fora das refeições</span></div>
-    <div class="meal-items">Beliscos e qualquer coisa que não estava no plano.</div>
+    <div class="meal-items">Beliscos, bebida alcoólica e refeição livre.</div>
     ${notesList(k, FORA)}
-    ${open ? noteEditor(false) : `<div><button type="button" class="note-btn" data-act="noteopen" data-meal="${FORA}">+ Anotar</button></div>`}
+    ${foraDrinks(k)}
+    ${open ? noteEditor(true) : `<div><button type="button" class="note-btn" data-act="noteopen" data-meal="${FORA}">+ Anotar</button></div>`}
   </div></article>`;
 }
 function waterCard(k) {
@@ -627,7 +674,7 @@ function rulesCard(ws) {
   const f = freeStatus(ws);
   return `<section class="card stack rules" aria-label="Regras do plano">
     <div class="between"><h2 class="label">Regras do plano</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar</a></div>
-    <a class="rule-free" href="#extras"><span><strong>1 refeição livre por semana</strong><span class="small muted" style="display:block">Para comer algo fora do plano. Registre em Extras ou no “+ Anotar” da refeição.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></a>
+    <div class="rule-free"><span><strong>1 refeição livre por semana</strong><span class="small muted" style="display:block">Registre no “+ Anotar” da refeição ou em Fora das refeições.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></div>
     ${S.rules.length ? `<ul class="rule-list">${S.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
   </section>`;
 }
@@ -723,33 +770,6 @@ function goalsCard() {
 }
 
 /* ---------- Extras ---------- */
-function viewExtras() {
-  const ws = weekStart();
-  const free = !!S.free[ws];
-  const D = UI.drink;
-  const cur = DRINKS[D.type];
-  const total = D.cups * D.ml;
-  const kcal = drinkKcal(D.type, D.cups, D.ml);
-  const list = weekDrinks(ws);
-  const wMl = list.reduce((a, d) => a + d.cups * d.ml, 0);
-  const wK = list.reduce((a, d) => a + d.kcal, 0);
-  return header('Extras', 'Semana de ' + ddmm(ws) + ' a ' + ddmm(addDays(ws, 6))) + `
-  <section class="card row" style="padding:16px 18px" aria-label="Refeição livre"><div style="flex:1"><div class="meal-name">Refeição livre</div><div class="small muted">${free ? 'Usada nesta semana · 1 de 1' : 'Disponível · 0 de 1 nesta semana'}</div></div>
-    <button type="button" class="btn small ${free ? 'ghost' : ''}" style="border-radius:99px" data-act="free">${free ? 'Desfazer' : 'Registrar'}</button></section>
-  <section class="card stack" aria-label="Bebida alcoólica"><div class="meal-name">Bebida alcoólica</div>
-    <div class="grid4">${Object.keys(DRINKS).map((id) => `<button type="button" class="chip o ${id === D.type ? 'on' : ''}" style="padding:0 4px;border-radius:12px;font-size:13px" aria-pressed="${id === D.type}" data-act="drinktype" data-v="${id}">${DRINKS[id].label}</button>`).join('')}</div>
-    <div class="grid2">
-      <div class="field">Copos<div class="stepper"><button type="button" data-act="cups" data-v="-1" aria-label="Menos copos">−</button><span class="num">${D.cups}</span><button type="button" data-act="cups" data-v="1" aria-label="Mais copos">+</button></div></div>
-      <div class="field">ml por copo<div class="stepper"><button type="button" data-act="ml" data-v="-1" aria-label="Menos ml">−</button><span class="num">${D.ml}</span><button type="button" data-act="ml" data-v="1" aria-label="Mais ml">+</button></div></div>
-    </div>
-    <label class="field">Data<input class="input" id="drink-data" type="date" value="${todayKey()}" max="${todayKey()}"></label>
-    <div class="drink-total"><span>Prévia · ${D.cups} × ${D.ml} ml = ${nf(total)} ml</span><span class="num">≈ ${nf(kcal)} kcal</span></div>
-    <button type="button" class="btn block orange" data-act="adddrink">Registrar ${cur.label.toLowerCase()}</button>
-  </section>
-  <div class="stack" style="gap:8px"><div class="between label"><span>Nesta semana</span><span>${list.length ? nf(wMl) + ' ml · ≈ ' + nf(wK) + ' kcal' : ''}</span></div>
-    ${list.length ? list.map((d) => `<div class="log-item"><span>${ddmm(d.date)} · ${d.cups} × ${d.ml} ml de ${esc((DRINKS[d.type] || {}).label || d.type).toLowerCase()}</span><span class="row" style="gap:4px"><strong>≈ ${nf(d.kcal)} kcal</strong><button type="button" class="del-btn" data-act="deldrink" data-id="${esc(d.id)}" aria-label="Apagar registro">${I.x}</button></span></div>`).join('') : '<div class="log-item muted" style="padding:14px 16px">Nenhuma bebida alcoólica registrada</div>'}
-  </div>`;
-}
 
 /* ---------- Progresso ---------- */
 /* Gráfico de linha com média móvel, linha de referência e pontos que mostram o valor ao tocar */
@@ -863,6 +883,7 @@ function pdDayCard(cells) {
   return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
     <div class="pd-selhead">${arrow(newer, 'Dia fora da meta mais recente', '‹')}<div class="pd-seltitle"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="small muted" style="font-weight:600">${pos >= 0 ? `${pos + 1} de ${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : q.length ? `${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : 'Nenhum dia fora da meta'}</span></div>${arrow(older, 'Dia fora da meta mais antigo', '›')}</div>
     <div class="between" style="align-items:baseline"><span><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
+    ${treinosDe(pick.k).map((t) => `<div class="pd-treino">${esc(Core.treinoTxt(t))}<span>TreinoHoje</span></div>`).join('')}
     ${r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
     ${lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
     ${pick.k >= addDays(todayKey(), -MAX_BACK) ? `<button type="button" class="btn small" style="align-self:flex-start" data-act="openday" data-k="${pick.k}">Abrir o dia</button>` : ''}
@@ -930,13 +951,31 @@ function pdWeekCard() {
     <div class="small muted">${pat ? 'Padrão da semana: ' + pat + '.' : ''}${before.length ? ` Semana anterior: ${nb} ${nb === 1 ? 'dia' : 'dias'}.` : ''}</div></div>
     ${prev ? `<div class="pd-deal"><span class="small" style="font-weight:600">Combinado da semana passada</span><span style="font-weight:600">${esc(prev.t)}</span></div>` : ''}
     <div class="stack" style="gap:8px"><span style="font-weight:600">Combinado para esta semana</span>
-      ${now && !UI.dealEdit ? `<div class="between" style="align-items:center"><span class="pd-deal-now">${esc(now.t)}</span><button type="button" class="tap-link" data-act="dealedit">Trocar</button></div>` : `
+      ${now && !UI.dealEdit ? `<div class="between" style="align-items:center"><span class="pd-deal-now">${esc(now.t)}</span><button type="button" class="link-btn pri" data-act="dealedit">Trocar</button></div>` : `
       <div class="chips">${sug.map((t) => `<button type="button" class="chip small-chip" data-act="deal" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
       <div class="row" style="gap:8px"><input class="input" id="deal-text" type="text" maxlength="80" placeholder="Ou escreva o seu" aria-label="Combinado para esta semana" style="flex:1"><button type="button" class="btn small" data-act="dealtext">Salvar</button></div>`}
       <div class="small muted">Vai junto na exportação do histórico.</div></div>
   </section>`;
 }
+/* Dieta × treino: só aparece com pelo menos 3 dias de cada lado no período */
+function pdTreinoCard(cells) {
+  const rs = cells.filter((c) => c.r);
+  const com = rs.filter((c) => treinosDe(c.k).length), sem = rs.filter((c) => !treinosDe(c.k).length);
+  if (com.length < 3 || sem.length < 3) return '';
+  const avg = (a) => a.reduce((x, c) => x + c.r.kcal, 0) / a.length;
+  const off = (a) => a.filter((c) => c.r.st === 'over' || c.r.st === 'under').length;
+  const miss = {};
+  com.forEach((c) => c.r.missed.forEach((m) => { (miss[m] = miss[m] || []).push(c.k); }));
+  const top = Object.entries(miss).sort((a, b) => b[1].length - a[1].length)[0];
+  return `<section class="card stack" aria-label="Dieta e treino"><div class="between"><h2 class="label">Dieta × treino</h2><span class="small muted">TreinoHoje</span></div>
+    <div class="between small"><span>Média em dia de treino <span class="muted">(${com.length})</span></span><strong class="num">${nf(avg(com))} kcal</strong></div>
+    <div class="between small"><span>Média sem treino <span class="muted">(${sem.length})</span></span><strong class="num">${nf(avg(sem))} kcal</strong></div>
+    <div class="between small"><span>Dias fora da meta</span><span><strong>${off(com)}</strong> com treino · <strong>${off(sem)}</strong> sem</span></div>
+    ${top && top[1].length >= 2 ? `<div class="small" style="border-top:1px solid var(--line);padding-top:8px"><strong>${esc(top[0])} não feito em ${top[1].length} dias de treino</strong><br><span class="muted">${top[1].map(ddmm).join(', ')}</span></div>` : ''}
+  </section>`;
+}
 function viewAlimentacao() {
+  setTimeout(() => fetchTreinos(), 0);
   const weeks = UI.pw || 4;
   const cells = reviewRange(weeks);
   const rs = cells.filter((c) => c.r).map((c) => c.r);
@@ -957,8 +996,8 @@ function viewAlimentacao() {
     const a = wr.length ? wr.reduce((s2, r) => s2 + r.kcal, 0) / wr.length : null;
     const acls = a === null ? '' : a > hi ? 'pd-t-over' : a < lo ? 'pd-t-under' : '';
     cal.push(`<div class="pd-calrow">${row.map((x) => x.r
-      ? `<button type="button" class="pd-day pd-${x.r.st} ${UI.pday === x.k ? 'on' : ''}" data-act="pday" data-k="${x.k}" aria-label="${WD_SHORT[x.i % 7]} ${ddmm(x.k)}: ${nf(x.r.kcal)} kcal, ${PD_TXT[x.r.st].toLowerCase()}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g">${PD_GLYPH[x.r.st]}</span></button>`
-      : `<span class="pd-day pd-none ${x.today ? 'today' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g"></span></span>`).join('')}<span class="pd-avg num ${acls}">${a === null ? '' : nf(a)}</span></div>`);
+      ? `<button type="button" class="pd-day pd-${x.r.st} ${UI.pday === x.k ? 'on' : ''}" data-act="pday" data-k="${x.k}" aria-label="${WD_SHORT[x.i % 7]} ${ddmm(x.k)}: ${nf(x.r.kcal)} kcal, ${PD_TXT[x.r.st].toLowerCase()}${treinosDe(x.k).length ? ', treinou' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g">${PD_GLYPH[x.r.st]}</span>${treinosDe(x.k).length ? '<span class="pd-tr" aria-hidden="true"></span>' : ''}</button>`
+      : `<span class="pd-day pd-none ${x.today ? 'today' : ''}"><span>${parseKey(x.k).getDate()}</span><span class="pd-g"></span>${treinosDe(x.k).length ? '<span class="pd-tr" aria-hidden="true"></span>' : ''}</span>`).join('')}<span class="pd-avg num ${acls}">${a === null ? '' : nf(a)}</span></div>`);
   }
   const summary = `<section class="card stack" aria-label="Dias fora da meta"><div class="between" style="align-items:center"><h2 class="label">Calorias</h2>
       <div class="pill small-pill" role="group" aria-label="Período"><button type="button" data-act="pw" data-v="4" aria-pressed="${weeks === 4}">4 semanas</button><button type="button" data-act="pw" data-v="8" aria-pressed="${weeks === 8}">8 semanas</button></div></div>
@@ -970,10 +1009,10 @@ function viewAlimentacao() {
     </div>
     <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
     <div class="pd-cal"><div class="pd-calrow pd-calhead">${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}<span class="pd-avg">média</span></div>${cal.join('')}</div>
-    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li></ul>
+    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li>${cells.some((c) => treinosDe(c.k).length) ? '<li><span class="lg-tr"></span>Treinou</li>' : ''}</ul>
   </section>`;
   const dayCard = pdDayCard(cells);
-  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
+  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdTreinoCard(cells)}${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
 }
 function viewProgresso() {
   const g = S.goals;
@@ -1024,14 +1063,12 @@ function viewProgresso() {
       <div class="small muted" style="margin-top:8px">Cintura caindo com peito, braço e coxa mantidos ou subindo é perda de gordura com ganho de massa.</div></section>` : ''}
     <section class="card" aria-label="Histórico"><h2 class="label" style="margin-bottom:6px">Histórico</h2>
       ${e.length ? `<table class="table"><thead><tr><th>Data</th><th>Peso</th><th>Cintura</th><th class="del"><span class="sr-only">Apagar</span></th></tr></thead><tbody>${(UI.histAll ? e.slice().reverse() : e.slice(-5).reverse()).map((x) => `<tr><td>${ddmm(x.date)}${MEDIDAS.slice(1).some((m) => num(x[m.id])) ? ' <span class="tag">+ medidas</span>' : ''}${x.fotos && x.fotos.length ? ' <span class="tag">foto</span>' : ''}</td><td><strong>${num(x.peso) ? nf(x.peso, 1) + ' kg' : '—'}</strong></td><td>${x.cintura ? nf(x.cintura, 1) + ' cm' : '—'}</td><td class="del"><button type="button" class="del-btn" data-act="delcheckin" data-date="${x.date}" aria-label="Apagar check-in de ${ddmm(x.date)}">${I.x}</button></td></tr>`).join('')}</tbody></table>${e.length > 5 ? `<button type="button" class="btn small ghost block" style="margin-top:12px" data-act="histall">${UI.histAll ? 'Mostrar só os 5 últimos' : 'Ver todos os ' + e.length + ' check-ins'}</button>` : ''}` : '<div class="small muted">Sem check-ins ainda.</div>'}</section>
-    <section class="card stack" aria-label="Exportar histórico"><div class="meal-name">Histórico completo</div>
-      <div class="small muted">Planilha com o resumo de cada dia, as refeições feitas, as anotações, a água, as bebidas alcoólicas, os check-ins e as metas. Dá para mandar para uma IA analisar.</div>
-      <button type="button" class="btn small" data-act="exporthist">Exportar histórico</button></section>
   </div></div>`;
 }
 
 /* ---------- Plano ---------- */
 function viewPlano() {
+  if (UI.planTab === 'compras') return viewCompras();
   const P = UI.plano;
   if (P.meal >= S.plan.length) P.meal = Math.max(0, S.plan.length - 1);
   const m = S.plan[P.meal];
@@ -1059,16 +1096,19 @@ function viewPlano() {
       <div class="toolbar">${o ? '<button type="button" class="btn small ghost" data-act="dupopt">Duplicar opção</button>' : ''}${o && m.opts.length > 1 ? '<button type="button" class="btn danger" data-act="delopt">Apagar opção</button>' : ''}<button type="button" class="btn danger" data-act="delmeal">Apagar refeição</button></div>
     </section>`;
   }
-  return header('Plano', 'Totais com a 1ª opção de cada refeição') + `
-    <div class="grid4 plan-tiles" style="gap:10px">${tile('Calorias', t.k, g.kcal, '', 'tot-k')}${tile('Proteína', t.p, g.prot, ' g', 'tot-p')}${tile('Carbo', t.c, g.carb, ' g', 'tot-c')}${tile('Gordura', t.g, g.fat, ' g', 'tot-g')}</div>
-    <section class="card stack" aria-label="Planilha" style="gap:10px"><div class="toolbar"><button type="button" class="btn small ghost" data-act="import">Importar planilha</button><button type="button" class="btn small ghost" data-act="export">Exportar planilha</button><button type="button" class="btn small ghost" data-act="reset">Restaurar plano padrão</button></div>
-      <details class="more"><summary>Formato da planilha</summary><div class="small muted" style="padding-bottom:8px">Use a planilha exportada como modelo: colunas Refeição, Horário, Opção, Alimento, Quantidade, kcal, Proteína (g), Carbo (g), Gordura (g) e Dica. Importar substitui o plano atual.</div></details></section>
-    <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>
-    <section class="card stack" aria-label="Regras do plano"><h2 class="label">Regras do plano</h2>
-      <div class="small muted">A refeição livre (1 por semana) é fixa. Escreva aqui as outras observações, uma por linha. Elas aparecem em Hoje.</div>
+  const metas = UI.metasOpen
+    ? `<section class="card stack" aria-label="Regras do plano"><div class="between"><h2 class="label">Metas e regras</h2><button type="button" class="link-btn pri" data-act="metas">Fechar</button></div>
+      <div class="small muted">A refeição livre (1 por semana) é fixa. Escreva aqui as outras regras, uma por linha. Elas aparecem em Hoje.</div>
       <textarea class="input" rows="4" data-in="rules" aria-label="Regras do plano, uma por linha">${esc(S.rules.join('\n'))}</textarea></section>
-    ${goalsCard()}`;
+    ${goalsCard()}`
+    : `<section class="card stack" aria-label="Metas e regras" style="gap:4px"><div class="between"><h2 class="label">Metas e regras</h2><button type="button" class="link-btn pri" data-act="metas">Editar</button></div>
+      <div class="small muted">${nf(g.kcal)} kcal · ${nf(g.prot)} g de proteína · ${(num(g.agua) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L de água · ${S.rules.length + 1} ${S.rules.length ? 'regras' : 'regra'}</div></section>`;
+  return header('Plano', 'Totais com a 1ª opção de cada refeição') + planSeg() + `
+    <div class="grid4 plan-tiles" style="gap:10px">${tile('Calorias', t.k, g.kcal, '', 'tot-k')}${tile('Proteína', t.p, g.prot, ' g', 'tot-p')}${tile('Carbo', t.c, g.carb, ' g', 'tot-c')}${tile('Gordura', t.g, g.fat, ' g', 'tot-g')}</div>
+    <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>
+    ${metas}`;
 }
+const planSeg = () => `<div class="pill prog-tabs" role="group" aria-label="O que ver"><button type="button" data-act="plantab" data-v="refeicoes" aria-pressed="${UI.planTab !== 'compras'}">Refeições</button><button type="button" data-act="plantab" data-v="compras" aria-pressed="${UI.planTab === 'compras'}">Compras</button></div>`;
 function refreshTotals() {
   const t = planDefaultTotals();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -1098,8 +1138,27 @@ function shopItems() {
   const C = S.shop;
   return Core.shoppingList(S, C.days, C.opt, C.mode === 'auto' ? shopMix() : null);
 }
+/* Ajustes da lista só valem para a semana atual: tirar um item, mudar a quantidade, acrescentar algo */
+const shopKey = (x) => Core.norm(x.food) + '|' + x.unit;
+function shopEdits() {
+  const ws = weekStart();
+  const E = S.shop.edit;
+  return E && E.wk === ws ? E : { wk: ws, rm: {}, qty: {}, add: [] };
+}
+function setShopEdits(fn) {
+  const E = shopEdits();
+  fn(E);
+  S.shop.edit = E;
+  save({ touch: 'shop' });
+}
+function shopFinal() {
+  const E = shopEdits();
+  const base = shopItems().map((x) => { const key = shopKey(x); return { key, food: x.food, meals: x.meals.join(', '), qty: E.qty[key] || fmtQty(x.n, x.unit), edited: !!E.qty[key], removed: !!E.rm[key] }; });
+  const added = (E.add || []).map((a) => ({ key: 'add|' + a.id, id: a.id, food: a.food, meals: 'Acrescentado nesta semana', qty: a.qty || '', custom: true }));
+  return { list: base.filter((x) => !x.removed).concat(added), removed: base.filter((x) => x.removed) };
+}
 function shopText() {
-  return shopItems().map((x) => `- ${x.food}: ${fmtQty(x.n, x.unit)}`).join('\n');
+  return shopFinal().list.map((x) => `- ${x.food}${x.qty ? ': ' + x.qty : ''}`).join('\n');
 }
 const DIA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 /* Dia das compras: ajuste em Conta e card em Hoje */
@@ -1110,16 +1169,16 @@ function shopDayText() {
 }
 function shopTodayCard(k) {
   if (k !== todayKey() || S.shop.day < 0 || parseKey(k).getDay() !== S.shop.day || PREF.shop.seen === k || !S.plan.length) return '';
-  const n = shopItems().length;
-  return `<section class="card shop-card" aria-label="Lista de compras"><span class="shop-ico">${I.compras}</span><a href="#compras" class="shop-card-main"><span class="meal-name">Dia de compras</span><span class="small muted">Lista da semana pronta: ${n} itens para ${S.shop.days} dias${S.shop.mode === 'auto' ? ', pelo que você tem comido' : ''}.</span></a><button type="button" class="del-btn" data-act="shopseen" aria-label="Esconder até a próxima semana">${I.x}</button></section>`;
+  const n = shopFinal().list.length;
+  return `<section class="card shop-card" aria-label="Lista de compras"><span class="shop-ico">${I.compras}</span><a href="#plano" data-act="plantab" data-v="compras" class="shop-card-main"><span class="meal-name">Dia de compras</span><span class="small muted">Lista da semana pronta: ${n} itens para ${S.shop.days} dias${S.shop.mode === 'auto' ? ', pelo que você tem comido' : ''}.</span></a><button type="button" class="del-btn" data-act="shopseen" aria-label="Esconder até a próxima semana">${I.x}</button></section>`;
 }
 function viewCompras() {
   const C = S.shop;
   const P = PREF.shop;
   const auto = C.mode === 'auto';
-  const list = shopItems();
-  const keyOfItem = (x) => Core.norm(x.food) + '|' + x.unit;
-  const got = list.filter((x) => P.got[keyOfItem(x)]).length;
+  const F = shopFinal();
+  const list = F.list;
+  const got = list.filter((x) => P.got[x.key]).length;
   const multi = S.plan.filter((m) => m.opts.length > 1);
   const mix = auto ? shopMix() : null;
   const optInfo = multi.map((m) => {
@@ -1129,7 +1188,7 @@ function viewCompras() {
     }
     return `<div class="stack" style="gap:6px"><span class="field">${esc(m.name)}</span><div class="chips">${m.opts.map((o, i) => `<button type="button" class="chip small-chip ${(C.opt[m.id] || 0) === i ? 'on' : ''}" aria-pressed="${(C.opt[m.id] || 0) === i}" data-act="shopopt" data-meal="${esc(m.id)}" data-i="${i}">${esc(o.name)}</button>`).join('')}</div></div>`;
   }).join('');
-  return header('Compras', C.day >= 0 ? 'Compras ' + shopDayText() : 'A partir do plano') + `
+  return header('Plano', C.day >= 0 ? 'Compras ' + shopDayText() : 'Lista de compras a partir do plano') + planSeg() + `
     <section class="card stack" aria-label="Como montar a lista">
       <div class="pill" role="group" aria-label="Como escolher as opções" style="align-self:flex-start"><button type="button" data-act="shopmode" data-v="auto" aria-pressed="${auto}">Pelo que você come</button><button type="button" data-act="shopmode" data-v="manual" aria-pressed="${!auto}">Escolher opções</button></div>
       <div class="small muted">${auto ? 'Soma as opções de cada refeição na proporção em que você escolheu cada uma nas últimas 2 semanas. Sem histórico, usa a 1ª opção.' : 'Escolha uma opção por refeição.'}</div>
@@ -1138,7 +1197,17 @@ function viewCompras() {
       <div class="stepper" style="min-width:160px"><button type="button" data-act="shopdays" data-v="-1" aria-label="Menos dias">−</button><span class="num">${C.days}</span><button type="button" data-act="shopdays" data-v="1" aria-label="Mais dias">+</button></div></div>
       <div class="small muted">Pesos de alimentos cozidos: compre um pouco mais do cru. O dia das compras se ajusta em <a href="#conta">Conta e ajustes</a>.</div></section>
     <section class="card" aria-label="Lista"><div class="between" style="margin-bottom:6px"><h2 class="label">Lista · ${got} de ${list.length}</h2>${got ? '<button type="button" class="link-btn" data-act="shopclear">Desmarcar tudo</button>' : ''}</div>
-      ${list.length ? `<ul class="shop">${list.map((x) => { const key = keyOfItem(x); const on = !!P.got[key]; return `<li><button type="button" class="shop-item ${on ? 'on' : ''}" data-act="shopgot" data-k="${esc(key)}" aria-pressed="${on}"><span class="check small ${on ? 'on' : ''}" aria-hidden="true">${on ? I.check : ''}</span><span class="shop-name">${esc(x.food)}<span class="small muted">${esc(x.meals.join(', '))}</span></span><strong class="num">${esc(fmtQty(x.n, x.unit))}</strong></button></li>`; }).join('')}</ul>` : '<div class="small muted">O plano está vazio.</div>'}
+      ${list.length ? `<ul class="shop">${list.map((x) => {
+        const on = !!P.got[x.key];
+        if (UI.shopEdit === x.key) return `<li class="shop-edit"><div class="shop-name" style="font-weight:600">${esc(x.food)}<span class="small muted">${esc(x.meals)}</span></div>
+          <label class="field">Quantidade desta semana<input class="input" id="shop-qty" type="text" value="${esc(x.qty)}" maxlength="30"></label>
+          <div class="toolbar"><button type="button" class="btn small" data-act="shopqty" data-k="${esc(x.key)}">Salvar</button><button type="button" class="btn small ghost" data-act="shoprm" data-k="${esc(x.key)}">${x.custom ? 'Apagar item' : 'Não comprar esta semana'}</button><button type="button" class="link-btn" data-act="shopeditx">Cancelar</button></div></li>`;
+        return `<li class="shop-li"><button type="button" class="shop-item ${on ? 'on' : ''}" data-act="shopgot" data-k="${esc(x.key)}" aria-pressed="${on}"><span class="check small ${on ? 'on' : ''}" aria-hidden="true">${on ? I.check : ''}</span><span class="shop-name">${esc(x.food)}<span class="small muted">${esc(x.meals)}</span></span><strong class="num">${esc(x.qty)}${x.edited ? ' <span class="tag">ajustado</span>' : ''}</strong></button><button type="button" class="shop-pen" data-act="shopedit" data-k="${esc(x.key)}" aria-label="Ajustar ${esc(x.food)}">${I.lapis}</button></li>`;
+      }).join('')}</ul>` : '<div class="small muted">A lista está vazia.</div>'}
+      ${UI.shopAdd ? `<div class="shop-edit" style="margin-top:8px"><div class="grid2"><label class="field">Item<input class="input" id="shop-add-food" type="text" maxlength="40" placeholder="ex.: Café"></label><label class="field">Quantidade<input class="input" id="shop-add-qty" type="text" maxlength="30" placeholder="ex.: 500 g"></label></div>
+        <div class="toolbar"><button type="button" class="btn small" data-act="shopaddok">Acrescentar</button><button type="button" class="link-btn" data-act="shopaddx">Cancelar</button></div></div>` : `<button type="button" class="btn small dashed block" style="margin-top:10px" data-act="shopadd">+ Acrescentar item</button>`}
+      ${F.removed.length ? `<details class="more" style="margin-top:8px"><summary>Fora da lista desta semana <span class="muted">· ${F.removed.length}</span></summary><ul class="shop-out">${F.removed.map((x) => `<li><span>${esc(x.food)}</span><button type="button" class="link-btn" data-act="shopback" data-k="${esc(x.key)}">Devolver</button></li>`).join('')}</ul></details>` : ''}
+      <div class="small muted" style="margin-top:8px">Os ajustes valem só para esta semana. Na segunda-feira a lista volta a seguir o plano.</div>
     </section>
     <div class="toolbar"><button type="button" class="btn small" data-act="shopshare">${I.copiar} ${navigator.share ? 'Compartilhar' : 'Copiar'} lista</button></div>`;
 }
@@ -1150,9 +1219,8 @@ function prefsCards() {
   const perm = supported ? Notification.permission : 'unsupported';
   const sel = (act, cur, opts) => `<div class="chips">${opts.map(([v, l]) => `<button type="button" class="chip small-chip ${cur === v ? 'on' : ''}" aria-pressed="${cur === v}" data-act="${act}" data-v="${v}">${l}</button>`).join('')}</div>`;
   const shopDays = [[-1, 'Nenhum']].concat([1, 2, 3, 4, 5, 6, 0].map((d) => [d, DIA_CURTO[d]]));
-  return `<section class="card stack" aria-label="Lista de compras"><div class="between" style="align-items:center"><span class="meal-name">Lista de compras semanal</span><a class="small" style="font-weight:600;text-decoration:none" href="#compras">Ver lista</a></div>
+  return `<section class="card stack" aria-label="Lista de compras"><div class="between" style="align-items:center"><span class="meal-name">Lista de compras semanal</span><a class="small" style="font-weight:600;text-decoration:none" href="#plano" data-act="plantab" data-v="compras">Ver lista</a></div>
     <span class="field">Dia das compras</span>${sel('shopday', S.shop.day, shopDays)}
-    <span class="field">Montar a lista</span>${sel('shopmode', S.shop.mode, [['auto', 'Pelo que você come'], ['manual', 'Escolhendo as opções']])}
     <div class="small muted">No dia das compras, a lista da semana aparece em Hoje${PREF.remind.on ? ' e chega um lembrete às 10h' : ' (e chega um lembrete às 10h, se os lembretes estiverem ligados)'}. Ela usa o plano atual, então muda sozinha quando a dieta muda.</div></section>
   <section class="card stack" aria-label="Tema"><div class="meal-name">Tema</div>${themePill()}<div class="small muted">Automático segue o modo claro ou escuro do aparelho.</div></section>
   <section class="card stack" aria-label="Lembretes"><div class="between" style="align-items:center"><span class="meal-name">Lembretes</span>
@@ -1164,19 +1232,41 @@ function prefsCards() {
         <div class="small muted">Só avisa refeições que ainda não foram marcadas, e água se estiver abaixo do esperado para a hora (entre 8h e 22h).</div>` : '<div class="small muted">Avisa na hora de cada refeição e, se quiser, para beber água.</div>'}
     <div class="small muted">Os avisos funcionam com o app aberto ou em segundo plano há pouco tempo. Com o app fechado por completo, o navegador não deixa um site avisar sem um servidor de notificações.</div></section>`;
 }
+function treinoCard() {
+  const T = TREINOS && TREINOS.uid === (UI.auth.user || {}).id ? TREINOS : null;
+  const ks = T && T.days ? Object.keys(T.days).sort() : [];
+  let st, txt;
+  if (!T) { st = 'Buscando…'; txt = 'Lendo os treinos do TreinoHoje.'; }
+  else if (T.err && !ks.length) { st = 'Sem acesso'; txt = 'Não consegui ler os treinos agora. Tente atualizar.'; }
+  else if (!T.found || !ks.length) { st = 'Nenhum treino'; txt = 'Entre no TreinoHoje com este mesmo e-mail para os treinos aparecerem aqui.'; }
+  else { st = 'Conectado'; txt = `${ks.length} ${ks.length === 1 ? 'dia' : 'dias'} com treino · último em ${ddmm(ks[ks.length - 1])}`; }
+  return `<section class="card stack" aria-label="TreinoHoje"><div class="between" style="align-items:center"><span class="meal-name">TreinoHoje</span><span class="tag">${esc(st)}</span></div>
+    <div class="small muted">${esc(txt)} Só leitura: o PersonalNutri não muda nada no TreinoHoje.</div>
+    <button type="button" class="btn small ghost" style="align-self:flex-start" data-act="treinosync">Atualizar treinos</button></section>`;
+}
+function dadosCard() {
+  return `<section class="card stack" aria-label="Dados"><div class="meal-name">Dados</div>
+    <div class="list-btns">
+      <button type="button" class="row-btn" data-act="exporthist"><span><strong>Exportar histórico</strong><span class="small muted">Planilha com cada dia, refeições, anotações, treinos, check-ins e combinados</span></span>${I.chev}</button>
+      <button type="button" class="row-btn" data-act="export"><span><strong>Exportar plano</strong><span class="small muted">Planilha do plano atual</span></span>${I.chev}</button>
+      <button type="button" class="row-btn" data-act="import"><span><strong>Importar plano</strong><span class="small muted">Substitui o plano atual pela planilha</span></span>${I.chev}</button>
+      <button type="button" class="row-btn" data-act="reset"><span><strong>Restaurar plano padrão</strong></span>${I.chev}</button>
+    </div>
+    <details class="more"><summary>Formato da planilha do plano</summary><div class="small muted" style="padding-bottom:8px">Use a planilha exportada como modelo: colunas Refeição, Horário, Opção, Alimento, Quantidade, kcal, Proteína (g), Carbo (g), Gordura (g) e Dica.</div></details></section>`;
+}
 function viewConta() {
   const head = header('Conta', '', ['#hoje', 'Hoje']);
   if (!sb) {
-    return head + `<div class="card stack"><div class="meal-name">Sincronização desligada</div><div class="small muted">Os dados ficam salvos só neste aparelho. Para ver no celular e no PC, preencha a URL e a chave anon do Supabase no arquivo config.js.</div></div>` + prefsCards();
+    return head + `<div class="card stack"><div class="meal-name">Sincronização desligada</div><div class="small muted">Os dados ficam salvos só neste aparelho. Para ver no celular e no PC, preencha a URL e a chave anon do Supabase no arquivo config.js.</div></div>` + prefsCards() + dadosCard();
   }
   const u = UI.auth.user;
   if (u) {
     return head + `<div class="card stack"><div class="small muted" style="font-weight:600">Conectado como</div><div class="meal-name" style="word-break:break-all">${esc(u.email)}</div>
       <div class="small muted" data-sync>${esc(UI.sync || 'Os dados sincronizam sozinhos entre o celular e o PC.')}</div>
-      <div class="toolbar"><button type="button" class="btn small" data-act="syncnow">Sincronizar agora</button><button type="button" class="btn small ghost" data-act="logout">Sair</button></div></div>` + prefsCards();
+      <div class="toolbar"><button type="button" class="btn small" data-act="syncnow">Sincronizar agora</button><button type="button" class="btn small ghost" data-act="logout">Sair</button></div></div>` + treinoCard() + prefsCards() + dadosCard();
   }
   return head + `<div class="card stack"><div class="meal-name">Usando sem conta</div><div class="small muted">Os dados ficam só neste aparelho. Com uma conta, o plano, as metas, o progresso e as fotos ficam iguais no celular e no PC.</div>
-    <div class="toolbar"><a class="btn small" href="#entrar">Entrar</a><a class="btn small ghost" href="#criar-conta">Criar conta</a></div></div>` + prefsCards();
+    <div class="toolbar"><a class="btn small" href="#entrar">Entrar</a><a class="btn small ghost" href="#criar-conta">Criar conta</a></div></div>` + prefsCards() + dadosCard();
 }
 
 /* ---------- Entrar / criar conta ---------- */
@@ -1362,7 +1452,7 @@ async function initAuth() {
     UI.auth.ready = true;
     if (event === 'PASSWORD_RECOVERY') UI.auth.recovery = true;
     UI.auth.user = session ? session.user : null;
-    if (UI.auth.user && UI.auth.user.id !== before) setTimeout(() => pull(), 0);
+    if (UI.auth.user && UI.auth.user.id !== before) setTimeout(() => { pull(); fetchTreinos(); }, 0);
     if (!UI.auth.user) setSync('');
     render();
   });
@@ -1564,6 +1654,7 @@ async function exportHistory() {
         'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida alcoólica': Math.round(kBeb), 'kcal total': Math.round(total),
         'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
         'Situação': rv ? PD_TXT[rv.st] : '', 'Causa principal': rv && rv.cause ? causeTxt(rv.cause) : '', 'Refeições não feitas': rv ? rv.missed.join(', ') : '',
+        'Treino (TreinoHoje)': treinosDe(k).map(Core.treinoTxt).join(' + '),
         'Proteína (g)': Math.round(p), 'Carbo (g)': Math.round(c), 'Gordura (g)': Math.round(gg),
         'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
         'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
@@ -1580,6 +1671,7 @@ async function exportHistory() {
       { 'Leia-me': 'Situação: na meta (kcal total dentro de ±10% da meta), acima, abaixo ou refeição livre (prevista no plano, 1 por semana). Hoje fica em branco porque o dia não terminou.' },
       { 'Leia-me': 'Causa principal: o que mais pesou no dia fora da meta. Acima: categoria da anotação de "comi a mais" (doce, bebida, salgado ou fast food, porção maior), troca mais calórica ou bebida alcoólica. Abaixo: refeição não feita ou porção menor.' },
       { 'Leia-me': 'Combinados: o que o usuário combinou consigo mesmo para cada semana, na revisão semanal do app.' },
+      { 'Leia-me': 'Treino (TreinoHoje): treinos registrados no app TreinoHoje na mesma conta (A, B, C... ou corrida com km). Vazio = sem treino registrado, ou conta não conectada.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum. Medidas com fita, sempre do lado direito: cintura no umbigo (semanal); peito na linha dos mamilos, braço contraído no pico do bíceps, coxa logo abaixo do glúteo e quadril no ponto mais largo (a cada 2 a 4 semanas).' }
@@ -1593,7 +1685,7 @@ async function exportHistory() {
     const wb = XLSX.utils.book_new();
     const add = (rows, name, cols) => { const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': 'Sem registros' }]); if (cols) ws['!cols'] = cols.map((w) => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
     add(leia, 'Leia-me', [110]);
-    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 14, 26, 30, 10, 10, 10, 9, 9, 9, 9, 9, 9, 80]);
+    add(resumo, 'Resumo diário', [11, 9, 9, 9, 9, 9, 9, 9, 9, 9, 14, 26, 30, 28, 10, 10, 10, 9, 9, 9, 9, 9, 9, 80]);
     add(refeicoes, 'Refeições', [11, 9, 16, 8, 26, 6, 9, 9, 9, 9, 9, 60]);
     add(anotacoes, 'Anotações', [11, 18, 16, 18, 50, 10, 10, 10, 10]);
     add(S.drinks.map((x) => ({ 'Data': x.date, 'Tipo': (DRINKS[x.type] || {}).label || x.type, 'Copos': x.cups, 'ml por copo': x.ml, 'Total (ml)': x.cups * x.ml, 'kcal estimadas': x.kcal })), 'Bebidas alcoólicas');
@@ -1648,7 +1740,7 @@ function scheduleReminders() {
   }
   if (S.shop.day >= 0 && now.getDay() === S.shop.day && S.plan.length) {
     const ms = at('10:00') - now;
-    if (ms > 0) remindTimers.push(setTimeout(() => notify('Dia de compras', `Lista da semana pronta: ${shopItems().length} itens. Toque para abrir.`, 'compras'), ms));
+    if (ms > 0) remindTimers.push(setTimeout(() => notify('Dia de compras', `Lista da semana pronta: ${shopFinal().list.length} itens. Toque para abrir.`, 'compras'), ms));
   }
   /* Na virada do dia, agenda de novo */
   const midnight = new Date(now); midnight.setHours(24, 0, 5, 0);
@@ -1760,6 +1852,8 @@ const ACT = {
   },
   exporthist: () => exportHistory(),
   histall: () => { UI.histAll = !UI.histAll; render(); },
+  plantab: (el) => { UI.planTab = el.dataset.v; UI.shopEdit = null; UI.shopAdd = false; if (route().name !== 'plano') location.hash = '#plano'; else { render(); window.scrollTo(0, 0); } },
+  metas: () => { UI.metasOpen = !UI.metasOpen; render(); },
   prog: (el) => { UI.prog = el.dataset.v; render(); },
   pw: (el) => { UI.pw = +el.dataset.v; render(); },
   pday: (el) => { UI.pday = el.dataset.k; render(); if (!matchMedia('(min-width: 900px)').matches) { const c = document.querySelector('.only-mobile .pd-sel'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); } },
@@ -1800,12 +1894,11 @@ const ACT = {
   ml: (el) => { const st = DRINKS[UI.drink.type].step; UI.drink.ml = Math.max(st, UI.drink.ml + st * (+el.dataset.v)); render(); },
   adddrink: () => {
     const D = UI.drink;
-    const dEl = document.getElementById('drink-data');
-    const date = (dEl && dEl.value && dEl.value <= todayKey()) ? dEl.value : todayKey();
+    const date = curDay();
     S.drinks.push({ id: uid(), date, type: D.type, cups: D.cups, ml: D.ml, kcal: drinkKcal(D.type, D.cups, D.ml), u: Date.now() });
     S.drinks.sort((a, b) => a.date.localeCompare(b.date));
-    UI.drink.cups = 1;
-    save(); toast('Bebida alcoólica registrada');
+    UI.drink.cups = 1; UI.note = null;
+    save(); toast('Bebida alcoólica anotada');
   },
   deldrink: (el) => {
     const x = S.drinks.find((d) => d.id === el.dataset.id); if (!x) return;
@@ -1884,6 +1977,31 @@ const ACT = {
   shopseen: () => { PREF.shop.seen = todayKey(); lsSet(SHOP_KEY, PREF.shop); render(); },
   shopgot: (el) => { const k = el.dataset.k; if (PREF.shop.got[k]) delete PREF.shop.got[k]; else PREF.shop.got[k] = 1; lsSet(SHOP_KEY, PREF.shop); render(); },
   shopclear: () => { PREF.shop.got = {}; lsSet(SHOP_KEY, PREF.shop); render(); },
+  shopedit: (el) => { UI.shopEdit = el.dataset.k; UI.shopAdd = false; render(); const i = document.getElementById('shop-qty'); if (i) i.focus(); },
+  shopeditx: () => { UI.shopEdit = null; render(); },
+  shopqty: (el) => {
+    const k = el.dataset.k; const v = (document.getElementById('shop-qty') || {}).value || '';
+    UI.shopEdit = null;
+    setShopEdits((E) => {
+      if (k.startsWith('add|')) { const a = E.add.find((x) => 'add|' + x.id === k); if (a) a.qty = v.trim(); return; }
+      if (v.trim()) E.qty[k] = v.trim(); else delete E.qty[k];
+    });
+  },
+  shoprm: (el) => {
+    const k = el.dataset.k; UI.shopEdit = null;
+    setShopEdits((E) => { if (k.startsWith('add|')) E.add = E.add.filter((x) => 'add|' + x.id !== k); else { E.rm[k] = 1; delete E.qty[k]; } });
+    toast(k.startsWith('add|') ? 'Item apagado' : 'Fora da lista desta semana');
+  },
+  shopback: (el) => setShopEdits((E) => { delete E.rm[el.dataset.k]; }),
+  shopadd: () => { UI.shopAdd = true; UI.shopEdit = null; render(); const i = document.getElementById('shop-add-food'); if (i) i.focus(); },
+  shopaddx: () => { UI.shopAdd = false; render(); },
+  shopaddok: () => {
+    const f = ((document.getElementById('shop-add-food') || {}).value || '').trim();
+    const q = ((document.getElementById('shop-add-qty') || {}).value || '').trim();
+    if (!f) { toast('Escreva o item'); return; }
+    UI.shopAdd = false;
+    setShopEdits((E) => { E.add = (E.add || []).concat([{ id: uid(), food: f, qty: q }]); });
+  },
   shopshare: async () => {
     const text = 'Lista de compras (' + S.shop.days + ' dias)\n' + shopText();
     try {
@@ -1904,7 +2022,8 @@ const ACT = {
   /* Conta */
   skipauth: () => { try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* ignore */ } UI.auth.msg = ''; UI.auth.info = ''; location.hash = '#hoje'; render(); },
   logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } markSynced(0); markRemote(''); UI.photos = {}; await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
-  syncnow: async () => { await pull(); toast(UI.sync || 'Sincronizado'); },
+  syncnow: async () => { await pull(); await fetchTreinos(true); toast(UI.sync || 'Sincronizado'); },
+  treinosync: () => fetchTreinos(true),
   update: () => { if (swWaiting) { swReload = true; swWaiting.postMessage('skip'); } }
 };
 
