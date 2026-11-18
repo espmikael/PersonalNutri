@@ -326,7 +326,7 @@ function releaseFree(k) {
 const NOTE_TYPES = { troca: 'Comi outra coisa', extra: 'Comi a mais', livre: 'Refeição livre' };
 const NOTE_SHORT = { troca: 'Troca', extra: 'A mais', livre: 'Refeição livre' };
 /* Categoria obrigatória de "comi a mais": é ela que mostra o padrão em Progresso › Alimentação */
-const NOTE_CATS = { doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior' };
+const NOTE_CATS = { doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior', outro: 'Outro (fruta, algo leve)' };
 const catTxt = (n) => (n.type === 'extra' && NOTE_CATS[n.cat] ? ' (' + NOTE_CATS[n.cat].toLowerCase() + ')' : '');
 /* Versões das funções do core.js presas ao estado atual */
 const notesOf = (k, mid) => Core.notesOf(S, k, mid);
@@ -1709,6 +1709,16 @@ const saveRemind = () => { lsSet(REMIND_KEY, PREF.remind); scheduleReminders(); 
 
 /* ---------- Ações ---------- */
 function curPlanOpt() { const m = S.plan[UI.plano.meal]; return m ? { m, o: m.opts[Math.min(UI.plano.opt[m.id] || 0, m.opts.length - 1)] } : {}; }
+function addPickToNote() {
+  const P = UI.pick; const f = FOOD_LIST[P.sel]; const N = UI.note;
+  if (!f || !N) return;
+  const x = Core.foodMacros(f, P.grams);
+  const qty = nf(num(P.grams)) + ' ' + foodUnit(f);
+  N.items.push({ food: f[0], qty, ...x });
+  sumNoteItems();
+  N.text = (String(N.text).trim() ? String(N.text).trim() + ', ' : '') + f[0].toLowerCase() + ' ' + qty;
+  UI.pick = null;
+}
 function sumNoteItems() {
   const N = UI.note;
   const t = sum(N.items);
@@ -1754,8 +1764,10 @@ const ACT = {
   notecancel: () => { UI.note = null; UI.pick = null; render(); },
   notesave: () => {
     const N = UI.note; if (!N) return;
+    /* Alimento escolhido no banco mas sem tocar em "Adicionar": entra junto, para as calorias não se perderem */
+    if (UI.pick && UI.pick.ctx === 'note' && UI.pick.sel !== null && num(UI.pick.grams)) addPickToNote();
     if (!String(N.text).trim() && !num(N.kcal)) { toast('Escreva o que comeu ou as calorias'); return; }
-    if (N.type === 'extra' && !NOTE_CATS[N.cat]) { toast('Escolha o que foi: doce, bebida, salgado ou porção maior'); return; }
+    if (N.type === 'extra' && !NOTE_CATS[N.cat]) { toast('Escolha o que foi: doce, bebida, salgado, porção maior ou outro'); return; }
     const k = curDay(); const d = dayRec(k);
     const note = { id: uid(), type: N.type, text: String(N.text).trim(), kcal: num(N.kcal) || '', at: new Date().toISOString() };
     if (N.type === 'extra') note.cat = N.cat;
@@ -1795,14 +1807,7 @@ const ACT = {
     if (!f || !num(P.grams)) { toast('Informe a quantidade'); return; }
     const x = Core.foodMacros(f, P.grams);
     const qty = nf(num(P.grams)) + ' ' + foodUnit(f);
-    if (P.ctx === 'note' && UI.note) {
-      const N = UI.note;
-      N.items.push({ food: f[0], qty, ...x });
-      sumNoteItems();
-      N.text = (String(N.text).trim() ? String(N.text).trim() + ', ' : '') + f[0].toLowerCase() + ' ' + qty;
-      UI.pick = null; render();
-      return;
-    }
+    if (P.ctx === 'note' && UI.note) { addPickToNote(); render(); return; }
     const { o } = curPlanOpt();
     if (!o) return;
     o.items.push(it(f[0], qty, x.k, x.p, x.c, x.g));
