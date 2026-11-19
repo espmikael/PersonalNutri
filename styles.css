@@ -63,7 +63,7 @@ input[type=number] { -moz-appearance: textfield; }
 .sub { font-size: 13px; color: var(--muted); font-weight: 500; }
 h1 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 34px; letter-spacing: -0.02em; line-height: 1.1; }
 @media (min-width: 900px) { h1 { font-size: 40px; } }
-h2.label, .label { margin: 0; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+h2.label, .label { margin: 0; font-size: 14px; color: var(--muted); font-weight: 600; }
 .back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; text-decoration: none; font-size: 14px; font-weight: 600; color: var(--pri-text); }
 .pill { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 3px; }
 .pill button { min-height: 36px; padding: 0 14px; border: none; border-radius: 99px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
@@ -275,13 +275,11 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .bar.thin { height: 6px; }
 .hero-foot { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--pri-text); border-top: 1px solid var(--row); padding-top: 12px; }
 .hero-foot a { text-decoration: none; }
-.streaks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.streak { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--o-text); background: var(--o-soft); border-radius: 99px; padding: 5px 10px; }
 @media (max-width: 380px) { .hero { grid-template-columns: 1fr; justify-items: center; } .hero-side { width: 100%; } }
 
 /* Refeições: próxima em destaque, feitas recolhidas */
 .meal.is-next { box-shadow: inset 0 0 0 2px var(--pri); }
-.next-pill { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--pri-ink); background: var(--pri); border-radius: 99px; padding: 3px 8px; }
+.next-pill { font-size: 12px; font-weight: 700; color: var(--pri-ink); background: var(--pri); border-radius: 99px; padding: 3px 8px; }
 .meal.is-done { background: color-mix(in srgb, var(--card) 70%, var(--bg)); }
 .meal.is-done .meal-name { font-size: 16px; }
 .meal.is-done .meal-items a { color: var(--pri-text); font-weight: 600; }
@@ -441,7 +439,33 @@ button.pd-day { cursor: pointer; }
 .shop-edit { display: flex; flex-direction: column; gap: 10px; background: var(--field); border-radius: 14px; padding: 12px; margin: 6px 0; }
 .shop-out { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
 .shop-out li { display: flex; justify-content: space-between; align-items: center; min-height: 40px; border-top: 1px solid var(--line); font-size: 14px; }
-.link-btn.pri { color: var(--pri-text); text-decoration: none; min-height: 36px; padding: 0; }
+.link-btn.pri { color: var(--pri-text); text-decoration: none; min-height: 44px; padding: 0 4px; margin: -4px -4px; }
 /* Campos de hora e data no iPhone: o Safari desenha esses campos com altura, alinhamento e largura próprios */
 .input[type="time"], .input[type="date"] { -webkit-appearance: none; appearance: none; display: block; height: 44px; min-height: 44px; line-height: 41px; text-align: left; max-width: 100%; }
 .input[type="time"]::-webkit-date-and-time-value, .input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 0; }
+
+/* ---------- Acabamento (make-interfaces-feel-better) ---------- */
+/* Texto: títulos equilibrados, parágrafos sem palavra órfã */
+h1, h2, .meal-name { text-wrap: balance; }
+p, .small, .muted, .meal-items, .hint, .pd-lines li { text-wrap: pretty; }
+/* Resposta ao toque: escala 0.96 nos controles compactos, cor com transição curta */
+.btn, .chip, .check, .note-btn, .pill button, .stepper button, .pd-day, .pd-cell, .pd-arrow, .shop-pen, .del-btn, .rev-btn, .tab-ico, .link-btn {
+  transition-property: scale, background-color, border-color, color, opacity;
+  transition-duration: 120ms, 150ms, 150ms, 150ms, 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+.btn:active, .chip:active, .check:active, .note-btn:active, .pill button:active, .stepper button:active, button.pd-day:active, .pd-cell:active:not(:disabled), .pd-arrow:active:not(:disabled), .shop-pen:active, .del-btn:active, .rev-btn:active, .tab:active .tab-ico { scale: 0.96; }
+/* Barra de abas: contorno por padrão, ícone ativo dentro de uma pílula */
+.tab-ico { display: flex; align-items: center; justify-content: center; width: 56px; height: 30px; border-radius: 99px; }
+.tab.on .tab-ico { background: var(--soft); }
+.tab.on .tab-ico svg { stroke-width: 2.25; }
+/* Fotos: contorno neutro de 1 px, sem tom da superfície */
+.photo img { outline: 1px solid oklch(0 0 0 / 0.1); outline-offset: -1px; }
+:root[data-theme="dark"] .photo img { outline-color: oklch(1 0 0 / 0.1); }
+/* Profundidade com sombra transparente, não com cor sólida */
+.card { box-shadow: 0 0 0 1px oklch(0 0 0 / 0.04), 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 2px 6px 0 oklch(0 0 0 / 0.03); }
+:where(:root[data-theme="dark"]) .card { box-shadow: 0 0 0 1px oklch(1 0 0 / 0.05); }
+.meal.is-next { box-shadow: inset 0 0 0 2px var(--pri); }
+.hint { box-shadow: inset 0 0 0 2px var(--mc); }
+.shop-card { box-shadow: inset 0 0 0 2px var(--mc); }
+.pd-sel { box-shadow: none; }
