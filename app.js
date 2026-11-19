@@ -409,7 +409,7 @@ function sidebar(r) {
 }
 function tabbar(r) {
   const k = navKey(r);
-  return `<nav class="tabbar" aria-label="Principal">${TABS.map(([id, label]) => `<a class="tab ${k === id ? 'on' : ''}" href="#${id}" ${k === id ? 'aria-current="page"' : ''}>${I[id]}${label}</a>`).join('')}</nav>`;
+  return `<nav class="tabbar" aria-label="Principal">${TABS.map(([id, label]) => `<a class="tab ${k === id ? 'on' : ''}" href="#${id}" ${k === id ? 'aria-current="page"' : ''}><span class="tab-ico">${I[id]}</span>${label}</a>`).join('')}</nav>`;
 }
 
 const AUTH_ROUTES = ['entrar', 'criar-conta', 'recuperar'];
