@@ -275,8 +275,6 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .bar.thin { height: 6px; }
 .hero-foot { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--pri-text); border-top: 1px solid var(--row); padding-top: 12px; }
 .hero-foot a { text-decoration: none; }
-.streaks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.streak { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--o-text); background: var(--o-soft); border-radius: 99px; padding: 5px 10px; }
 @media (max-width: 380px) { .hero { grid-template-columns: 1fr; justify-items: center; } .hero-side { width: 100%; } }
 
 /* Refeições: próxima em destaque, feitas recolhidas */

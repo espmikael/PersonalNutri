@@ -468,12 +468,6 @@ function ring(pct, size = 124, stroke = 11) {
   return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${h}" cy="${h}" r="${r}" fill="none" stroke="var(--row)" stroke-width="${stroke}"/><circle class="ring-val" cx="${h}" cy="${h}" r="${r}" fill="none" stroke="${over ? 'var(--o)' : 'var(--pri)'}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${h} ${h})"/></svg>`;
 }
 /* Sequências de dias cumprindo a proteína, a água e o plano inteiro */
-function streakPills(k) {
-  if (k !== todayKey()) return '';
-  const list = [['prot', 'batendo proteína'], ['agua', 'batendo a água'], ['plano', 'seguindo o plano']]
-    .map(([id, l]) => [Core.streak(S, id, k), l]).filter(([n]) => n >= 2);
-  return list.length ? `<div class="streaks">${list.map(([n, l]) => `<span class="streak">${I.fogo}${n} dias ${l}</span>`).join('')}</div>` : '';
-}
 /* Cartão principal do dia: anel das calorias e os três macros */
 function heroCard(k) {
   const c = consumed(k);
@@ -488,7 +482,6 @@ function heroCard(k) {
       ${mini('Proteína', c.p, g.prot, 'var(--mp)')}${mini('Carbo', c.c, g.carb, 'var(--mc)')}${mini('Gordura', c.g, g.fat, 'var(--mg)')}
       ${c.drink ? `<div class="small muted">Inclui ≈ ${nf(c.drink)} kcal de bebida alcoólica</div>` : ''}
     </div>
-    ${streakPills(k)}
     <div class="hero-foot"><span>${doneCount(k)} de ${S.plan.length} refeições</span><a href="#macros">Ver macros</a></div>
   </section>`;
 }
