@@ -563,8 +563,10 @@ function nextMealId(k) {
   if (k !== todayKey()) return null;
   const now = new Date(); const mins = now.getHours() * 60 + now.getMinutes();
   const toMin = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
-  const open = sortedPlan().filter((m) => !isDone(m, k));
-  const m = open.find((x) => toMin(x.time) >= mins - 90) || open[0];
+  /* Cada refeição vale até o horário da seguinte. Passou o horário da próxima sem marcar, ela fica para trás
+     (conta como não feita) e a "Próxima" pula para a refeição da vez. A última vale até a meia-noite. */
+  const plan = sortedPlan();
+  const m = plan.find((x, i) => !isDone(x, k) && (i === plan.length - 1 || toMin(plan[i + 1].time) > mins));
   return m ? m.id : null;
 }
 function mealCard(m, k, next) {
