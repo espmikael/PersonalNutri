@@ -54,7 +54,7 @@ function defaultPlan() {
 }
 /* Observações do plano (vieram do plano da nutricionista). A refeição livre semanal é fixa e aparece à parte. */
 const DEFAULT_RULES = ['Não pular refeições, mesmo que atrase um pouco.', 'Evitar ultraprocessados.', 'Quando der, preferir alimentos integrais, com mais fibra.', RULE_FRUTA];
-const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '' };
+const DEFAULT_GOALS = { kcal: 1860, prot: 175, carb: 205, fat: 40, agua: 2700, peso: 81, meta: '', livres: 1 };
 const DRINKS = {
   cerveja: { label: 'Cerveja', k: 0.43, ml: 350, step: 50 },
   vinho: { label: 'Vinho', k: 0.85, ml: 150, step: 25 },
@@ -312,16 +312,20 @@ function dropReplacements(k, mid) {
   if (!d.notes[mid].length) delete d.notes[mid];
   if (had) releaseFree(k);
 }
-function setFree(ws, k) { S.free[ws] = k; S.freeU[ws] = Date.now(); unbury('f:' + ws); }
-function clearFree(ws) { delete S.free[ws]; delete S.freeU[ws]; bury('f:' + ws); }
-/* Libera a refeição livre da semana se nenhuma outra anotação de livre continuar nessa semana */
+/* Datas com refeição livre na semana. Antes era uma data só (texto); agora é uma lista */
+const freeDays = (ws) => { const v = S.free[ws]; return Array.isArray(v) ? v.slice() : v ? [v] : []; };
+function setFree(ws, k) { const l = freeDays(ws); if (!l.includes(k)) l.push(k); S.free[ws] = l.sort(); S.freeU[ws] = Date.now(); unbury('f:' + ws); }
+function clearFree(ws, k) {
+  const l = k ? freeDays(ws).filter((d) => d !== k) : [];
+  if (l.length) { S.free[ws] = l; S.freeU[ws] = Date.now(); return; }
+  delete S.free[ws]; delete S.freeU[ws]; bury('f:' + ws);
+}
+/* Libera a refeição livre deste dia se nenhuma outra anotação de livre continuar nele */
 function releaseFree(k) {
+  const day = S.days[k];
+  if (day && day.notes && Object.values(day.notes).some((arr) => arr.some((n) => n.type === 'livre'))) return;
   const ws = weekStart(k);
-  for (let i = 0; i < 7; i++) {
-    const day = S.days[addDays(ws, i)];
-    if (day && day.notes && Object.values(day.notes).some((arr) => arr.some((n) => n.type === 'livre'))) return;
-  }
-  if (S.free[ws]) clearFree(ws);
+  if (freeDays(ws).includes(k)) clearFree(ws, k);
 }
 const NOTE_TYPES = { troca: 'Comi outra coisa', extra: 'Comi a mais', livre: 'Refeição livre' };
 const NOTE_SHORT = { troca: 'Troca', extra: 'A mais', livre: 'Refeição livre' };
@@ -653,15 +657,28 @@ function waterCard(k) {
     <div class="water-btns"><button type="button" class="btn small ghost" data-act="water" data-v="-250" aria-label="Tirar 250 ml">− 250 ml</button><button type="button" class="btn small" data-act="water" data-v="250">+ 250 ml</button><button type="button" class="btn small" data-act="water" data-v="500">+ 500 ml</button></div>
   </section>`;
 }
-function freeStatus(ws = weekStart()) {
-  const used = S.free[ws];
-  return used ? { on: false, text: 'Usada ' + (used === todayKey() ? 'hoje' : DIAS[parseKey(used).getDay()].toLowerCase()) } : { on: true, text: 'Disponível' };
+/* Livres usadas na semana: anotações de refeição livre, mais dias marcados como livre sem anotação (registro antigo) */
+function livresUsadas(ws) {
+  const ate = addDays(ws, 6);
+  const notas = Core.livresNaSemana(S, ate);
+  const semNota = freeDays(ws).filter((d) => !S.days[d] || !Object.values(S.days[d].notes || {}).some((arr) => arr.some((x) => x.type === 'livre'))).length;
+  return notas + semNota;
 }
+function freeStatus(ws = weekStart()) {
+  const L = Core.livresPorSemana(S);
+  const n = livresUsadas(ws);
+  const dias = freeDays(ws);
+  const dia = (d) => (d === todayKey() ? 'hoje' : DIAS[parseKey(d).getDay()].toLowerCase());
+  if (!L) return { on: false, text: n ? 'Fora do plano' : 'Nenhuma' };
+  if (L === 1) return n ? { on: false, text: n > 1 ? `${n} usadas, 1 no plano` : 'Usada ' + (dias[0] ? dia(dias[0]) : '') } : { on: true, text: 'Disponível' };
+  return { on: n < L, text: n > L ? `${n} usadas, ${L} no plano` : n === L ? 'Todas usadas' : `${n} de ${L} usadas` };
+}
+const freeRuleTxt = () => { const L = Core.livresPorSemana(S); return L ? (L === 1 ? '1 refeição livre por semana' : `${L} refeições livres por semana`) : 'Sem refeição livre nesta fase'; };
 function rulesCard(ws) {
   const f = freeStatus(ws);
   return `<section class="card stack rules" aria-label="Regras do plano">
     <div class="between"><h2 class="label">Regras do plano</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar</a></div>
-    <div class="rule-free"><span><strong>1 refeição livre por semana</strong><span class="small muted" style="display:block">Registre no “+ Anotar” da refeição ou em Fora das refeições.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></div>
+    <div class="rule-free"><span><strong>${esc(freeRuleTxt())}</strong><span class="small muted" style="display:block">Registre no “+ Anotar” da refeição ou em Fora das refeições.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></div>
     ${S.rules.length ? `<ul class="rule-list">${S.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
   </section>`;
 }
@@ -752,7 +769,7 @@ function goalsCard() {
   const falta = num(g.meta) && pesoAtual ? Math.round((pesoAtual - num(g.meta)) * 10) / 10 : null;
   const field = (label, key, ph, step) => `<label class="field">${label}<input class="input strong" type="number" inputmode="decimal" step="${step}" data-in="goal" data-k="${key}" value="${esc(g[key])}" placeholder="${esc(ph)}"></label>`;
   return `<section class="card stack" aria-label="Metas"><h2 class="label">Metas</h2>
-      <div class="grid2 goals-grid">${field('Calorias/dia', 'kcal', '1860', '1')}${field('Proteína (g)', 'prot', '175', '1')}${field('Carboidrato (g)', 'carb', '205', '1')}${field('Gordura (g)', 'fat', '40', '1')}${field('Água/dia (ml)', 'agua', '2700', '50')}${field('Peso de referência (kg)', 'meta', 'ex.: 76', '0.1')}</div>
+      <div class="grid2 goals-grid">${field('Calorias/dia', 'kcal', '1860', '1')}${field('Proteína (g)', 'prot', '175', '1')}${field('Carboidrato (g)', 'carb', '205', '1')}${field('Gordura (g)', 'fat', '40', '1')}${field('Água/dia (ml)', 'agua', '2700', '50')}${field('Peso de referência (kg)', 'meta', 'ex.: 76', '0.1')}${field('Refeições livres/semana', 'livres', '1', '1')}</div>
       <div class="small muted">${falta !== null ? (falta > 0 ? `Faltam ${nf(falta, 1)} kg para o peso de referência.` : 'Peso de referência alcançado.') : 'O peso meta é só referência. A cintura e as medidas, em Progresso, mostram melhor a perda de gordura.'}</div></section>`;
 }
 
@@ -1066,11 +1083,11 @@ function viewPlano() {
   }
   const metas = UI.metasOpen
     ? `<section class="card stack" aria-label="Regras do plano"><div class="between"><h2 class="label">Metas e regras</h2><button type="button" class="link-btn pri" data-act="metas">Fechar</button></div>
-      <div class="small muted">A refeição livre (1 por semana) é fixa. Escreva aqui as outras regras, uma por linha. Elas aparecem em Hoje.</div>
+      <div class="small muted">A quantidade de refeições livres fica em Metas, logo abaixo. Escreva aqui as outras regras, uma por linha. Elas aparecem em Hoje.</div>
       <textarea class="input" rows="4" data-in="rules" aria-label="Regras do plano, uma por linha">${esc(S.rules.join('\n'))}</textarea></section>
     ${goalsCard()}`
     : `<section class="card stack" aria-label="Metas e regras" style="gap:4px"><div class="between"><h2 class="label">Metas e regras</h2><button type="button" class="link-btn pri" data-act="metas">Editar</button></div>
-      <div class="small muted">${nf(g.kcal)} kcal · ${nf(g.prot)} g de proteína · ${(num(g.agua) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L de água · ${S.rules.length + 1} ${S.rules.length ? 'regras' : 'regra'}</div></section>`;
+      <div class="small muted">${nf(g.kcal)} kcal · ${nf(g.prot)} g de proteína · ${(num(g.agua) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L de água · ${esc(freeRuleTxt().toLowerCase())} · ${S.rules.length} ${S.rules.length === 1 ? 'regra' : 'regras'}</div></section>`;
   return header('Plano', 'Totais com a 1ª opção de cada refeição') + planSeg() + `
     <div class="grid4 plan-tiles" style="gap:10px">${tile('Calorias', t.k, g.kcal, '', 'tot-k')}${tile('Proteína', t.p, g.prot, ' g', 'tot-p')}${tile('Carbo', t.c, g.carb, ' g', 'tot-c')}${tile('Gordura', t.g, g.fat, ' g', 'tot-g')}</div>
     <div class="split plano"><nav class="meal-tabs" aria-label="Refeições">${tabs}</nav>${editor}</div>
@@ -1602,7 +1619,7 @@ async function exportHistory() {
       const bebidas = S.drinks.filter((x) => x.date === k);
       const kBeb = bebidas.reduce((a, x) => a + num(x.kcal), 0);
       const ck = S.checkins.find((x) => x.date === k);
-      const livre = notesOf(k, FORA).concat(...mealsOfDay(k).map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || S.free[weekStart(k)] === k;
+      const livre = notesOf(k, FORA).concat(...mealsOfDay(k).map((m) => notesOf(k, m.id))).some((n) => n.type === 'livre') || freeDays(weekStart(k)).includes(k);
       const total = kPlano + kAnot + kBeb;
       const rv = k < todayKey() ? Core.dayReview(S, k) : null;
       resumo.push({
@@ -1773,9 +1790,14 @@ const ACT = {
       if (!d.done[N.meal]) d.byNote[N.meal] = true;
       d.done[N.meal] = true; delete d.snap[N.meal];
     }
-    if (N.type === 'livre') setFree(weekStart(k), k);
+    let aviso = 'Anotado';
+    if (N.type === 'livre') {
+      const ws = weekStart(k), L = Core.livresPorSemana(S);
+      if (livresUsadas(ws) > L) aviso = L ? `${L === 1 ? 'A refeição livre' : 'As ' + L + ' refeições livres'} da semana já ${L === 1 ? 'foi usada' : 'foram usadas'}. Esta conta como fora do plano.` : 'Nesta fase não há refeição livre. Esta conta como fora do plano.';
+      setFree(ws, k);
+    }
     UI.note = null; UI.pick = null;
-    save(); toast('Anotado');
+    save(); toast(aviso);
   },
   notedel: (el) => {
     const k = curDay(); const ws = weekStart(k);
@@ -1789,7 +1811,7 @@ const ACT = {
     /* A refeição foi marcada só por causa da anotação: sem ela, volta a não feita */
     if (gone && (gone.type === 'troca' || gone.type === 'livre') && !stillRepl && d.byNote[mid]) { d.done[mid] = false; delete d.byNote[mid]; delete d.snap[mid]; }
     save();
-    undoable('Anotação apagada', () => { S.days[k] = { ...before.day, u: Date.now() }; if (before.free) setFree(ws, before.free); save(); });
+    undoable('Anotação apagada', () => { S.days[k] = { ...before.day, u: Date.now() }; if (before.free) S.free[ws] = before.free; save(); });
   },
   /* Banco de alimentos */
   pickopen: (el) => { UI.pick = { ctx: el.dataset.v, q: '', sel: null, grams: 100 }; render(); const q = document.getElementById('pick-q'); if (q) q.focus(); },
@@ -1838,7 +1860,7 @@ const ACT = {
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {
     const ws = weekStart();
-    if (S.free[ws]) {
+    if (freeDays(ws).length) {
       for (let i = 0; i < 7; i++) {
         const day = addDays(ws, i);
         const dd = S.days[day];

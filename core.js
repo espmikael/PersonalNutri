@@ -274,8 +274,16 @@
      mais pesou: categorias das anotações de "comi a mais", trocas, bebida alcoólica ou refeições não feitas. */
   const CAUSES = {
     doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior', outro: 'Comeu além do plano',
-    troca: 'Trocou por algo mais calórico', pulou: 'Refeição não feita', menos: 'Comeu menos que o plano', livre: 'Refeição livre', plano: 'Plano acima da meta', semkcal: 'Troca sem calorias anotadas'
+    troca: 'Trocou por algo mais calórico', pulou: 'Refeição não feita', menos: 'Comeu menos que o plano', livre: 'Refeição livre', plano: 'Plano acima da meta', semkcal: 'Troca sem calorias anotadas', livreextra: 'Refeição livre além do limite da semana'
   };
+  /* Refeições livres por semana (Metas). Vazio = 1, o padrão do plano */
+  const livresPorSemana = (s) => { const v = (s.goals || {}).livres; return v === '' || v === undefined || v === null ? 1 : Math.max(0, Math.round(num(v))); };
+  /* Quantas anotações de refeição livre o dia tem */
+  const livresDoDia = (s, k) => { const d = s.days && s.days[k]; return d && d.notes ? Object.values(d.notes).reduce((a, arr) => a + (arr || []).filter((n) => n.type === 'livre').length, 0) : 0; };
+  /* As livres da semana até o fim deste dia (inclusive) */
+  function livresNaSemana(s, k) { let t = 0; for (let d = weekStart(k); d <= k; d = addDays(d, 1)) t += livresDoDia(s, d); return t; }
+  /* As livres deste dia ainda cabem no limite da semana? */
+  const livreNoLimite = (s, k) => livresNaSemana(s, k) <= livresPorSemana(s);
   function dayReview(s, k, tol = 0.1) {
     const meta = num((s.goals || {}).kcal);
     const tot = consumed(s, k);
@@ -307,6 +315,11 @@
     });
     if (tot.drink) { put(over, 'bebida', tot.drink); cells.push({ meal: FORA, kind: 'over' }); }
     let st = 'ok';
+    /* Passou do limite de refeições livres da semana: conta como dia normal, e a livre vira a causa do excesso */
+    if (livre && !livreNoLimite(s, k)) {
+      livre = false;
+      cells.forEach((c) => { if (c.kind === 'livre') { c.kind = 'over'; put(over, 'livreextra', meta || 1); } });
+    }
     if (livre) st = 'livre';
     else if (meta && kcal > meta * (1 + tol)) st = 'over';
     else if (meta && kcal < meta * (1 - tol)) st = 'under';
@@ -345,7 +358,7 @@
     num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
     FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
     mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros,
-    CAUSES, dayReview, mergeDeals
+    CAUSES, dayReview, mergeDeals, livresPorSemana, livreNoLimite, livresNaSemana
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(typeof self !== 'undefined' ? self : this);
