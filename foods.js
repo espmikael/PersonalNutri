@@ -154,6 +154,7 @@
     ['Pastel de carne frito', 388, 10.1, 43.8, 20.1, '1 unidade', 80],
     ['Esfiha de carne', 260, 11, 32, 9, '1 unidade', 80],
     ['Sushi', 150, 6, 28, 1.5, '1 peça', 30],
+    ['Gyudon (carne com cebola, arroz, ovo e crispy)', 191, 8.9, 21.1, 7.8, '1 tigela', 450],
 
     // Bebidas (por 100 ml)
     ['Refrigerante', 42, 0, 10.6, 0, '1 lata', 350],
