@@ -215,3 +215,16 @@ test('merge: combinado da semana fica com o mais novo', () => {
   assert.equal(out.deals['2026-11-02'].t, 'C');
 });
 
+
+test('refeições livres: o limite da semana vem das metas; a que passa conta como dia normal', () => {
+  const D1 = '2026-11-16', D2 = '2026-11-17'; /* segunda e terça da mesma semana */
+  const livreDay = { done: { cafe: true }, notes: { almoco: [{ type: 'livre', kcal: 2500 }] } };
+  const s1 = base({ goals: { kcal: 900, livres: 1 }, days: { [D1]: livreDay, [D2]: livreDay } });
+  assert.equal(C.dayReview(s1, D1).st, 'livre');
+  assert.equal(C.dayReview(s1, D2).st, 'over');
+  assert.equal(C.dayReview(s1, D2).cause, 'livreextra');
+  const s2 = base({ goals: { kcal: 900, livres: 2 }, days: { [D1]: livreDay, [D2]: livreDay } });
+  assert.equal(C.dayReview(s2, D2).st, 'livre');
+  assert.equal(C.livresPorSemana(base({ goals: { kcal: 900, livres: '' } })), 1);
+  assert.equal(C.livresPorSemana(base({ goals: { kcal: 900, livres: 0 } })), 0);
+});
