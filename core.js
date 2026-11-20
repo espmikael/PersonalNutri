@@ -111,6 +111,9 @@
     out.checkins = [...byDate.values()].filter((c) => alive('c:' + c.date, c.u)).sort((x, y) => x.date.localeCompare(y.date));
 
     out.deals = mergeDeals(local.deals, remote.deals);
+    const byPause = new Map();
+    (remote.pauses || []).concat(local.pauses || []).forEach((x) => { const o = byPause.get(x.id); if (!o || (x.u || 0) >= (o.u || 0)) byPause.set(x.id, x); });
+    out.pauses = [...byPause.values()].filter((x) => alive('p:' + x.id, x.u)).sort((x, y) => x.from.localeCompare(y.from));
     out.free = {}; out.freeU = {};
     const lf = local.free || {}, rf = remote.free || {}, lu = local.freeU || {}, ru = remote.freeU || {};
     new Set([...Object.keys(lf), ...Object.keys(rf)]).forEach((ws) => {
@@ -129,12 +132,15 @@
   }
 
   /* ---------- Resumo da semana ---------- */
+  /* ---------- Pausas (férias, viagem, festa): dias que ficam fora das análises ---------- */
+  const pauseOf = (s, k) => (s.pauses || []).find((x) => x.from <= k && k <= x.to) || null;
   function weekStats(s, ws, today = todayKey()) {
     const g = s.goals || {};
-    let days = 0, logged = 0, done = 0, possible = 0, k = 0, p = 0, w = 0, drinkMl = 0, protOk = 0;
+    let days = 0, logged = 0, done = 0, possible = 0, k = 0, p = 0, w = 0, drinkMl = 0, protOk = 0, paused = 0;
     for (let i = 0; i < 7; i++) {
       const d = addDays(ws, i);
       if (d > today) break;
+      if (pauseOf(s, d)) { paused++; continue; }
       days++;
       possible += s.plan.length;
       done += doneCount(s, d);
@@ -155,7 +161,7 @@
       ws, days, logged, done, possible,
       adherence: possible ? done / possible : 0,
       avgK: logged ? k / logged : 0, avgP: logged ? p / logged : 0, avgWater: logged ? w / logged : 0,
-      protOk, drinkMl, free: !!(s.free || {})[ws],
+      protOk, drinkMl, paused, free: !!(s.free || {})[ws],
       weight: last ? num(last.peso) : null,
       weightDelta: last && ref ? Math.round((num(last.peso) - num(ref.peso)) * 10) / 10 : null
     };
@@ -289,6 +295,8 @@
     const tot = consumed(s, k);
     const kcal = Math.round(tot.k);
     const diff = meta ? kcal - meta : 0;
+    const pz = pauseOf(s, k);
+    if (pz) return { k, kcal, meta, diff, st: 'pausa', cause: null, pause: pz, missed: [], cells: [], over: {}, under: {} };
     const cells = [];
     const over = {}, under = {};
     const put = (o, c, v) => { o[c] = (o[c] || 0) + v; };
@@ -358,7 +366,7 @@
     num, pad, keyOf, parseKey, todayKey, addDays, weekStart, daysBetween, ZERO, sum, norm,
     FORA, notesOf, optIndex, isDone, sortedPlan, planned, mealsOfDay, mealIntake, dayDrinks, consumed, doneCount, water, hasLog,
     mergeStates, pruneTombs, weekStats, streak, goalHint, movingAvg, parseQty, optionMix, shoppingList, searchFoods, foodMacros,
-    CAUSES, dayReview, mergeDeals, livresPorSemana, livreNoLimite, livresNaSemana
+    CAUSES, dayReview, mergeDeals, pauseOf, livresPorSemana, livreNoLimite, livresNaSemana
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(typeof self !== 'undefined' ? self : this);
