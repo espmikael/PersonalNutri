@@ -65,7 +65,7 @@ const DRINKS = {
 /* Lista de compras: modo auto (pelas opções comidas nas últimas 2 semanas) ou manual; dia da semana das compras (0 = domingo, -1 = sem dia) */
 const DEFAULT_SHOP = { mode: 'auto', day: 6, days: 7, opt: {} };
 function defaultState() {
-  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, deals: {}, planU: 0, rulesU: 0, goalsU: 0, shop: { ...DEFAULT_SHOP }, shopU: 0 };
+  return { v: 2, updatedAt: 0, plan: defaultPlan(), rules: DEFAULT_RULES.slice(), goals: { ...DEFAULT_GOALS }, days: {}, free: {}, freeU: {}, drinks: [], checkins: [], tomb: {}, deals: {}, pauses: [], planU: 0, rulesU: 0, goalsU: 0, shop: { ...DEFAULT_SHOP }, shopU: 0 };
 }
 function normalizeState(x) {
   const d = defaultState();
@@ -77,7 +77,7 @@ function normalizeState(x) {
     rules: Array.isArray(x.rules) ? x.rules : d.rules,
     shop: { ...d.shop, ...(x.shop || {}) },
     mig: x.mig || {},
-    days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {}, deals: x.deals || {},
+    days: x.days || {}, free: x.free || {}, freeU: x.freeU || {}, tomb: x.tomb || {}, deals: x.deals || {}, pauses: Array.isArray(x.pauses) ? x.pauses : [],
     drinks: Array.isArray(x.drinks) ? x.drinks : [],
     checkins: Array.isArray(x.checkins) ? x.checkins : []
   };
@@ -206,6 +206,7 @@ const UI = {
   pcell: null,
   dealEdit: false,
   review: null,
+  pauseForm: null,
   pt: null,
   flash: null,
   photos: {},
@@ -459,6 +460,7 @@ function weekGrid(ws = weekStart()) {
   const cells = labels.map((l, i) => {
     const k = addDays(ws, i);
     const n = doneCount(k);
+    if (Core.pauseOf(S, k)) return `<div class="${k === t ? 'today' : ''}"><span>${l}</span><span class="wbox pausa" aria-label="${DIAS[parseKey(k).getDay()]}: pausa">–</span></div>`;
     if (k <= t) { done += n; possible += total; }
     const cls = k > t ? '' : n >= total ? 'full' : n > 0 ? 'part' : '';
     return `<div class="${k === t ? 'today' : ''}"><span>${l}</span><span class="wbox ${cls}" aria-label="${DIAS[parseKey(k).getDay()]}: ${n} de ${total}">${k > t ? '' : n}</span></div>`;
@@ -494,7 +496,7 @@ function weekSummary(ws, compact) {
   const g = S.goals;
   const L = (v) => (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const tile = (v, l, sub) => `<div class="tile sum"><span class="num">${v}</span><span>${l}</span>${sub ? `<span class="tile-sub">${sub}</span>` : ''}</div>`;
-  if (!w.days) return '<div class="small muted">A semana ainda não começou.</div>';
+  if (!w.days) return w.paused ? '<div class="small muted">Semana em pausa até agora.</div>' : '<div class="small muted">A semana ainda não começou.</div>';
   const wd = w.weightDelta;
   return `<div class="grid4 sum-grid">
       ${tile(Math.round(w.adherence * 100) + '%', 'do plano', `${w.done} de ${w.possible} refeições`)}
@@ -503,7 +505,8 @@ function weekSummary(ws, compact) {
       ${tile(w.logged ? L(w.avgWater) + ' L' : '—', 'água/dia', num(g.agua) ? 'meta ' + L(num(g.agua)) + ' L' : '')}
     </div>
     ${compact ? '' : `<div class="sum-line small"><span>Peso: <strong>${w.weight ? nf(w.weight, 1) + ' kg' : 'sem pesagem'}</strong>${wd !== null ? ` (${wd > 0 ? '+' : ''}${nf(wd, 1)} kg)` : ''}</span><span>Bebida: <strong>${nf(w.drinkMl)} ml</strong></span><span>Refeição livre: <strong>${w.free ? 'usada' : 'não usada'}</strong></span></div>`}
-    ${w.logged < w.days ? `<div class="small muted">Médias dos ${w.logged} ${w.logged === 1 ? 'dia' : 'dias'} com registro, de ${w.days}.</div>` : ''}`;
+    ${w.logged < w.days ? `<div class="small muted">Médias dos ${w.logged} ${w.logged === 1 ? 'dia' : 'dias'} com registro, de ${w.days}.</div>` : ''}
+    ${w.paused ? `<div class="small muted">${w.paused} ${w.paused === 1 ? 'dia' : 'dias'} em pausa, fora da conta.</div>` : ''}`;
 }
 /* Medidas com fita: cintura toda semana; as outras a cada 2 a 4 semanas */
 const MEDIDAS = [
@@ -689,6 +692,14 @@ function repeatable(k) {
   return S.plan.filter((m) => isDone(m, prev) && !notesOf(prev, m.id).some((n) => n.type === 'troca' || n.type === 'livre'));
 }
 /* Faixa da revisão em sequência dos dias fora da meta (aberta pelo card em Progresso › Alimentação) */
+/* Dia dentro de uma pausa: aviso no topo do Hoje */
+function pauseBanner(k) {
+  const pz = Core.pauseOf(S, k);
+  if (!pz) return '';
+  const per = pz.from === pz.to ? ddmm(pz.from) : `${ddmm(pz.from)} a ${ddmm(pz.to)}`;
+  return `<div class="pause-bar" role="note"><div><strong>Pausa · ${esc(pz.name || 'Pausa')}</strong><span class="small">${per}. Este dia fica fora das análises. Anotar é opcional.</span></div>
+    <button type="button" class="link-btn pri" data-act="pzend" data-id="${esc(pz.id)}" data-k="${k}">Encerrar aqui</button></div>`;
+}
 function reviewBanner(k) {
   const R = UI.review;
   if (!R || R.list[R.at] !== k) return '';
@@ -723,7 +734,7 @@ function viewHoje() {
   </div>`;
   const nextId = nextMealId(k);
   const meals = sortedPlan().map((m) => mealCard(m, k, m.id === nextId)).join('') + mealsOfDay(k).filter((m) => m.orphan).map((m) => mealCard(m, k, false)).join('') + (S.plan.length ? foraCard(k) : '');
-  return reviewBanner(k) + header(dayTitle(k), dayNav(k)) + (UI.review || isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
+  return reviewBanner(k) + header(dayTitle(k), dayNav(k)) + pauseBanner(k) + (UI.review || isToday ? '' : `<div class="tip">${I.info}<div>Você está editando ${ddmm(k)}. As marcações, anotações e água vão para esse dia.</div></div>`) +
     `<div class="split"><div class="col"><div class="only-mobile col">${shopTodayCard(k)}${heroCard(k)}${repBtn}${waterCard(k)}</div>${meals || '<div class="card muted">Nenhuma refeição no plano. <a href="#plano">Montar o plano</a></div>'}<div class="only-mobile col">${lastWeek}${rulesCard(ws)}</div></div>${side}</div>`;
 }
 
@@ -836,8 +847,8 @@ function photosCard() {
 }
 /* ---------- Progresso › Alimentação: dias fora da meta e padrões ----------
    Só julga dias passados, a partir do primeiro dia com registro. Refeição não marcada conta como não feita. */
-const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo' };
-const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼' };
+const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo', pausa: 'Pausa' };
+const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼', pausa: '–' };
 const WD_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const sgnK = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n));
 function setDeal(t) {
@@ -879,6 +890,14 @@ function pdDayCard(cells) {
   const pick = cells.find((c) => c.k === UI.pday && c.r) || cells.find((c) => c.k === q[0]) || cells.slice().reverse().find((c) => c.r);
   if (!pick) return '';
   const r = pick.r;
+  if (r.st === 'pausa') {
+    const per = r.pause.from === r.pause.to ? ddmm(r.pause.from) : `${ddmm(r.pause.from)} a ${ddmm(r.pause.to)}`;
+    return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
+      <div class="between" style="align-items:center"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="pd-pill pd-pausa">Pausa</span></div>
+      <div style="font-weight:600">${esc(r.pause.name || 'Pausa')} <span class="muted" style="font-weight:500">· ${per}</span></div>
+      <div class="small muted">Fora das médias, do mapa e dos alertas.${r.kcal ? ` Anotado no dia: ≈ ${nf(r.kcal)} kcal.` : ''}</div>
+    </section>`;
+  }
   const lines = dayLines(pick.k, r);
   const pos = q.indexOf(pick.k);
   const newer = pos > 0 ? q[pos - 1] : pos === -1 ? q.slice().reverse().find((k) => k > pick.k) : null;
@@ -963,12 +982,14 @@ function pdWeekCard() {
 function viewAlimentacao() {
   const weeks = UI.pw || 4;
   const cells = reviewRange(weeks);
-  const rs = cells.filter((c) => c.r).map((c) => c.r);
+  const all = cells.filter((c) => c.r).map((c) => c.r);
+  const rs = all.filter((r) => r.st !== 'pausa');
+  const nPausa = all.length - rs.length;
   const ws = addDays(weekStart(), UI.wk * 7);
   const week = `<section class="card stack" aria-label="Resumo da semana"><div class="between" style="align-items:center"><h2 class="label">Semana de ${ddmm(ws)}</h2>
       <div class="pill small-pill" role="group" aria-label="Qual semana"><button type="button" data-act="wk" data-v="-1" aria-pressed="${UI.wk === -1}">Passada</button><button type="button" data-act="wk" data-v="0" aria-pressed="${UI.wk === 0}">Esta</button></div></div>
       ${weekSummary(ws)}${weekGrid(ws).html}</section>`;
-  if (!rs.length) return `<div class="col">${week}<section class="card small muted">Os dias fora da meta aparecem aqui a partir de amanhã. Hoje não entra porque ainda não terminou.</section></div>`;
+  if (!rs.length) return `<div class="col">${week}<section class="card small muted">Os dias fora da meta aparecem aqui a partir de amanhã. Hoje não entra porque ainda não terminou.</section>${pausesCard()}</div>`;
   const c = (st) => rs.filter((r) => r.st === st).length;
   const avg = rs.reduce((a, r) => a + r.kcal, 0) / rs.length;
   const meta = num(S.goals.kcal);
@@ -977,7 +998,7 @@ function viewAlimentacao() {
   const cal = [];
   for (let w = 0; w < weeks; w++) {
     const row = cells.slice(w * 7, w * 7 + 7);
-    const wr = row.filter((x) => x.r).map((x) => x.r);
+    const wr = row.filter((x) => x.r && x.r.st !== 'pausa').map((x) => x.r);
     const a = wr.length ? wr.reduce((s2, r) => s2 + r.kcal, 0) / wr.length : null;
     const acls = a === null ? '' : a > hi ? 'pd-t-over' : a < lo ? 'pd-t-under' : '';
     cal.push(`<div class="pd-calrow">${row.map((x) => x.r
@@ -992,12 +1013,28 @@ function viewAlimentacao() {
       <div class="pd-tile pd-under"><span class="num">▼ ${c('under')}</span><span>abaixo</span></div>
       <div class="pd-tile"><span class="num">${miss}</span><span>refeições não feitas</span></div>
     </div>
-    <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
+    <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}${nPausa ? ` · ${nPausa} ${nPausa === 1 ? 'dia' : 'dias'} em pausa fora da conta` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
     <div class="pd-cal"><div class="pd-calrow pd-calhead">${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}<span class="pd-avg">média</span></div>${cal.join('')}</div>
-    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li></ul>
+    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li>${nPausa ? '<li><span class="lg pd-pausa"></span>Pausa</li>' : ''}</ul>
   </section>`;
   const dayCard = pdDayCard(cells);
-  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${week}</div></div>`;
+  return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${pausesCard()}${week}</div></div>`;
+}
+/* Pausas: períodos com nome (férias, viagem, festa) que ficam fora das análises */
+const PAUSE_SUG = ['Férias', 'Viagem de feriado', 'Festa de família', 'Praia'];
+function pausesCard() {
+  const F = UI.pauseForm;
+  const list = (S.pauses || []).slice().sort((a, b) => b.from.localeCompare(a.from));
+  const per = (x) => x.from === x.to ? ddmm(x.from) : `${ddmm(x.from)} a ${ddmm(x.to)}`;
+  const form = F ? `<div class="shop-edit" role="group" aria-label="${F.id ? 'Editar pausa' : 'Nova pausa'}">
+      <label class="field">Nome<input class="input" id="pz-name" type="text" maxlength="40" value="${esc(F.name || '')}" placeholder="ex.: Praia com a família"></label>
+      <div class="chips">${PAUSE_SUG.map((t) => `<button type="button" class="chip small-chip" data-act="pzsug" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+      <div class="grid2"><label class="field">De<input class="input" id="pz-from" type="date" value="${esc(F.from || '')}"></label><label class="field">Até<input class="input" id="pz-to" type="date" value="${esc(F.to || '')}"></label></div>
+      <div class="toolbar"><button type="button" class="btn small" data-act="pzsave">Salvar pausa</button>${F.id ? `<button type="button" class="btn small ghost" data-act="pzdel" data-id="${esc(F.id)}">Apagar</button>` : ''}<button type="button" class="link-btn" data-act="pzcancel">Cancelar</button></div></div>` : '';
+  return `<section class="card stack" aria-label="Pausas"><div class="between" style="align-items:center"><h2 class="label">Pausas</h2>${F ? '' : '<button type="button" class="link-btn pri" data-act="pznew">+ Nova pausa</button>'}</div>
+    <div class="small muted">Férias, viagem ou festa: os dias da pausa ficam fora das médias, do mapa e dos alertas, e saem na exportação como “Pausa”.</div>
+    ${list.length ? `<ul class="shop-out">${list.map((x) => `<li><span><strong>${esc(x.name || 'Pausa')}</strong> <span class="muted">· ${per(x)}</span></span><button type="button" class="link-btn pri" data-act="pzedit" data-id="${esc(x.id)}">Editar</button></li>`).join('')}</ul>` : ''}
+    ${form}</section>`;
 }
 function viewProgresso() {
   const g = S.goals;
@@ -1626,7 +1663,7 @@ async function exportHistory() {
         'Data': k, 'Dia': dn, 'Refeições feitas': feitas, 'Refeições no plano': S.plan.length,
         'kcal do plano': Math.round(kPlano), 'kcal anotadas': Math.round(kAnot), 'kcal de bebida alcoólica': Math.round(kBeb), 'kcal total': Math.round(total),
         'Meta kcal': num(g.kcal) || '', 'Diferença da meta': num(g.kcal) ? Math.round(total - num(g.kcal)) : '',
-        'Situação': rv ? PD_TXT[rv.st] : '', 'Causa principal': rv && rv.cause ? causeTxt(rv.cause) : '', 'Refeições não feitas': rv ? rv.missed.join(', ') : '',
+        'Situação': rv ? (rv.st === 'pausa' ? 'Pausa · ' + (rv.pause.name || '') : PD_TXT[rv.st]) : '', 'Causa principal': rv && rv.cause ? causeTxt(rv.cause) : '', 'Refeições não feitas': rv ? rv.missed.join(', ') : '',
         'Proteína (g)': Math.round(p), 'Carbo (g)': Math.round(c), 'Gordura (g)': Math.round(gg),
         'Refeição livre': sim(livre), 'Bebida alcoólica (ml)': bebidas.reduce((a, x) => a + x.cups * x.ml, 0),
         'Água (ml)': num(S.days[k] && S.days[k].water), 'Meta de água (ml)': num(g.agua) || '',
@@ -1643,6 +1680,7 @@ async function exportHistory() {
       { 'Leia-me': 'Situação: na meta (kcal total dentro de ±10% da meta), acima, abaixo ou refeição livre (prevista no plano, 1 por semana). Hoje fica em branco porque o dia não terminou.' },
       { 'Leia-me': 'Causa principal: o que mais pesou no dia fora da meta. Acima: categoria da anotação de "comi a mais" (doce, bebida, salgado ou fast food, porção maior), troca mais calórica ou bebida alcoólica. Abaixo: refeição não feita ou porção menor.' },
       { 'Leia-me': 'Combinados: o que o usuário combinou consigo mesmo para cada semana, na revisão semanal do app.' },
+      { 'Leia-me': 'Pausa: período marcado pelo usuário (férias, viagem, festa) em que ele não seguiu o plano de propósito. Esses dias não são falhas: deixe-os fora das médias e da busca por padrões.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },
       { 'Leia-me': 'Peso medido em jejum. Medidas com fita, sempre do lado direito: cintura no umbigo (semanal); peito na linha dos mamilos, braço contraído no pico do bíceps, coxa logo abaixo do glúteo e quadril no ponto mais largo (a cada 2 a 4 semanas).' }
@@ -1856,6 +1894,35 @@ const ACT = {
   deal: (el) => setDeal(el.dataset.v),
   dealtext: () => { const i = document.getElementById('deal-text'); const t = i ? i.value.trim() : ''; if (!t) { toast('Escreva o combinado'); return; } setDeal(t); },
   dealedit: () => { UI.dealEdit = true; render(); },
+  pznew: () => { const t = todayKey(); UI.pauseForm = { name: '', from: t, to: addDays(t, 3) }; render(); const i = document.getElementById('pz-name'); if (i) i.focus(); },
+  pzedit: (el) => { const x = S.pauses.find((p) => p.id === el.dataset.id); if (x) { UI.pauseForm = { ...x }; render(); } },
+  pzcancel: () => { UI.pauseForm = null; render(); },
+  pzsug: (el) => { const i = document.getElementById('pz-name'); if (i) { i.value = el.dataset.v; i.focus(); } },
+  pzsave: () => {
+    const F = UI.pauseForm; if (!F) return;
+    const v = (id) => ((document.getElementById(id) || {}).value || '').trim();
+    const name = v('pz-name') || 'Pausa', from = v('pz-from'), to = v('pz-to') || from;
+    if (!from) { toast('Escolha o primeiro dia da pausa'); return; }
+    if (to < from) { toast('O último dia vem antes do primeiro'); return; }
+    const outra = S.pauses.find((p) => p.id !== F.id && p.from <= to && from <= p.to);
+    if (outra) { toast('Esse período cruza com a pausa “' + (outra.name || 'Pausa') + '”'); return; }
+    const x = { id: F.id || uid(), name: name.slice(0, 40), from, to, u: Date.now() };
+    S.pauses = S.pauses.filter((p) => p.id !== x.id).concat([x]).sort((a, b) => a.from.localeCompare(b.from));
+    unbury('p:' + x.id);
+    UI.pauseForm = null; save(); toast('Pausa salva');
+  },
+  pzdel: (el) => {
+    const x = S.pauses.find((p) => p.id === el.dataset.id); if (!x) return;
+    S.pauses = S.pauses.filter((p) => p.id !== x.id); bury('p:' + x.id); UI.pauseForm = null; save();
+    undoable('Pausa apagada', () => { unbury('p:' + x.id); S.pauses.push({ ...x, u: Date.now() }); S.pauses.sort((a, b) => a.from.localeCompare(b.from)); save(); });
+  },
+  pzend: (el) => {
+    const x = S.pauses.find((p) => p.id === el.dataset.id); if (!x) return;
+    const k = el.dataset.k;
+    if (k <= x.from) { S.pauses = S.pauses.filter((p) => p.id !== x.id); bury('p:' + x.id); }
+    else { x.to = addDays(k, -1); x.u = Date.now(); }
+    save(); toast('Pausa encerrada. Este dia volta a contar.');
+  },
   day: (el) => changeDay(+el.dataset.v),
   water: (el) => { const d = dayRec(curDay()); d.water = Math.max(0, num(d.water) + (+el.dataset.v)); save(); },
   free: () => {

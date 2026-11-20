@@ -228,3 +228,23 @@ test('refeições livres: o limite da semana vem das metas; a que passa conta co
   assert.equal(C.livresPorSemana(base({ goals: { kcal: 900, livres: '' } })), 1);
   assert.equal(C.livresPorSemana(base({ goals: { kcal: 900, livres: 0 } })), 0);
 });
+
+test('pausa: dias da pausa ficam fora da análise e da semana', () => {
+  const pz = { id: 'p1', from: '2026-11-20', to: '2026-11-23', name: 'Praia com a família', u: 1 };
+  const s = base({ pauses: [pz], days: { '2026-11-21': { done: {} } } });
+  const r = C.dayReview(s, '2026-11-21');
+  assert.equal(r.st, 'pausa');
+  assert.equal(r.pause.name, 'Praia com a família');
+  assert.equal(C.dayReview(s, '2026-11-24').st, 'under');
+  const w = C.weekStats(s, '2026-11-16', '2026-11-22');
+  assert.equal(w.paused, 3);
+  assert.equal(w.days, 4);
+});
+
+test('merge: pausas por id, a mais nova vence e a apagada não volta', () => {
+  const a = { id: 'p1', from: '2026-11-20', to: '2026-11-23', name: 'Praia', u: 5 };
+  const b = { id: 'p1', from: '2026-11-20', to: '2026-11-22', name: 'Praia', u: 3 };
+  const c = { id: 'p2', from: '2026-12-24', to: '2026-12-26', name: 'Natal', u: 2 };
+  const out = C.mergeStates(base({ pauses: [a] }), base({ pauses: [b, c], tomb: { 'p:p2': 9 } }));
+  assert.deepEqual(out.pauses.map((x) => x.id + x.to), ['p12026-11-23']);
+});
