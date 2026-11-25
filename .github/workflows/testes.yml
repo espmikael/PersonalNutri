@@ -1,0 +1,25 @@
+# Roda os testes da lógica e das telas em cada pull request e em cada mudança no main.
+name: Testes
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: telas-com-erro
+          path: test-results/
