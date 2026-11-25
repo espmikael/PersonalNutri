@@ -1,8 +1,12 @@
 {
   "name": "personalnutri",
   "private": true,
-  "description": "App pessoal de plano alimentar. Site estático: não precisa instalar nada para rodar.",
+  "description": "App pessoal de plano alimentar. Site estático: para usar não precisa instalar nada; as dependências são só para os testes de tela.",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:ui": "playwright test -c tests/ui/playwright.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
   }
 }

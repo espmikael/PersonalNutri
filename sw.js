@@ -3,11 +3,11 @@
 // Fontes e bibliotecas de CDN: usa a cópia salva e atualiza em segundo plano.
 // Chamadas ao Supabase nunca passam pelo cache.
 // Versão nova fica esperando até o app pedir para ativar (botão "Atualizar"); na primeira instalação ativa direto.
-const VERSION = 'pn-v27';
+const VERSION = 'pn-v28';
 const APP_CACHE = VERSION + '-app';
 const CDN_CACHE = VERSION + '-cdn';
-const APP_FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './foods.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
-const CDN_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdn.sheetjs.com'];
+const APP_FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './foods.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png', './vendor/supabase.js', './vendor/591.supabase.js'];
+const CDN_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.sheetjs.com'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)));

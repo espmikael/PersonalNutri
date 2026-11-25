@@ -376,7 +376,7 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .pd-over { background: var(--o); color: var(--o-ink); }
 .pd-livre { background: var(--o-soft); color: var(--o-text); box-shadow: inset 0 0 0 1.5px var(--o); }
 .pd-under { background: var(--u); color: var(--u-ink); }
-.pd-mix { background: linear-gradient(135deg, var(--o) 50%, var(--u) 50%); color: #FFFFFF; text-shadow: 0 0 3px rgba(0,0,0,.55); }
+.pd-mix { background: var(--o); color: var(--o-ink); box-shadow: inset 0 0 0 3px var(--u); }
 .pd-none { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .pd-t-over, .pd-t-livre { color: var(--o-text); }
 .pd-t-under { color: var(--u-text); }
@@ -482,3 +482,9 @@ p, .small, .muted, .meal-items, .hint, .pd-lines li { text-wrap: pretty; }
 .pd-legend .lg.pd-semreg { box-shadow: inset 0 0 0 1.5px var(--muted); }
 .pd-semline { display: flex; align-items: center; gap: 10px; font-size: 14px; border-radius: 14px; padding: 10px 12px; box-shadow: inset 0 0 0 1.5px var(--line); }
 .pd-g-sem { width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--muted); box-shadow: inset 0 0 0 1.5px var(--muted); }
+
+/* Linha de números da semana (revisão) */
+.wl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+.wl-it { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wl-it .num { font-size: 16px; font-weight: 700; }
+.wl-it span:last-child { font-size: 11px; color: var(--muted); line-height: 1.3; }
