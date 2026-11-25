@@ -1993,7 +1993,7 @@ const ACT = {
   skipauth: () => { try { localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* ignore */ } UI.auth.msg = ''; UI.auth.info = ''; location.hash = '#hoje'; render(); },
   logout: async () => { try { localStorage.removeItem(SKIP_KEY); } catch (e) { /* ignore */ } markSynced(0); markRemote(''); UI.photos = {}; await sb.auth.signOut(); location.hash = '#entrar'; toast('Você saiu. Os dados continuam neste aparelho.'); },
   syncnow: async () => { await pull(); toast(UI.sync || 'Sincronizado'); },
-  update: () => { if (swWaiting) { swReload = true; swWaiting.postMessage('skip'); } }
+  update: () => applyUpdate()
 };
 
 document.addEventListener('click', (e) => {
@@ -2093,7 +2093,22 @@ window.addEventListener('online', () => { if (UI.auth.user) pull(); });
 
 /* Atualização do app: quando há versão nova do service worker esperando, oferece recarregar */
 let swReg = null, swWaiting = null, swReload = false;
-function offerUpdate(w) { swWaiting = w; toast('Nova versão do app disponível', { action: 'Atualizar', fn: ACT.update, sticky: true }); }
+const swBoot = Date.now();
+/* Versão nova se instala sozinha, sem botão:
+   - logo ao abrir o app (nos primeiros 15 s), antes de você começar a usar;
+   - ou quando o app vai para segundo plano, se ela chegou com o app aberto.
+   Não aplica no meio de uma anotação, pausa ou edição da lista; espera a próxima vez. */
+const midEdit = () => !!(UI.note || UI.pauseForm || UI.shopEdit || UI.shopAdd || UI.pick || document.querySelector('.modal'));
+async function applyUpdate() {
+  if (!swWaiting || midEdit()) return;
+  if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; try { await push(); } catch (e) { /* segue mesmo offline */ } }
+  swReload = true;
+  swWaiting.postMessage('skip');
+}
+function offerUpdate(w) {
+  swWaiting = w;
+  if (Date.now() - swBoot < 15000) applyUpdate();
+}
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').then((reg) => {
     swReg = reg;
@@ -2105,6 +2120,11 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     });
   }).catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (swReload) { swReload = false; location.reload(); } });
+  /* Ao sair do app, aplica a versão que estiver esperando; ao voltar, procura versão nova */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') applyUpdate();
+    else if (swReg) swReg.update().catch(() => {});
+  });
 }
 
 render();
