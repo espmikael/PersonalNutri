@@ -847,8 +847,8 @@ function photosCard() {
 }
 /* ---------- Progresso › Alimentação: dias fora da meta e padrões ----------
    Só julga dias passados, a partir do primeiro dia com registro. Refeição não marcada conta como não feita. */
-const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo', pausa: 'Pausa' };
-const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼', pausa: '–' };
+const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo', pausa: 'Pausa', semreg: 'Sem registro' };
+const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼', pausa: '–', semreg: '?' };
 const WD_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const sgnK = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n));
 function setDeal(t) {
@@ -883,7 +883,8 @@ function dayLines(k, r) {
   return out;
 }
 /* Fila de dias fora da meta (acima ou abaixo; refeição livre não entra), do mais recente para o mais antigo */
-const offQueue = (cells) => cells.filter((c) => c.r && (c.r.st === 'over' || c.r.st === 'under')).map((c) => c.k).reverse();
+const OFF = ['over', 'under', 'semreg'];
+const offQueue = (cells) => cells.filter((c) => c.r && OFF.includes(c.r.st)).map((c) => c.k).reverse();
 function pdDayCard(cells) {
   const q = offQueue(cells);
   /* Sem escolha do usuário, mostra sempre o dia fora da meta mais recente */
@@ -898,16 +899,16 @@ function pdDayCard(cells) {
       <div class="small muted">Fora das médias, do mapa e dos alertas.${r.kcal ? ` Anotado no dia: ≈ ${nf(r.kcal)} kcal.` : ''}</div>
     </section>`;
   }
-  const lines = dayLines(pick.k, r);
+  const lines = r.st === 'semreg' ? [] : dayLines(pick.k, r);
   const pos = q.indexOf(pick.k);
   const newer = pos > 0 ? q[pos - 1] : pos === -1 ? q.slice().reverse().find((k) => k > pick.k) : null;
   const older = pos >= 0 ? q[pos + 1] : q.find((k) => k < pick.k);
   const arrow = (k, lbl, ch) => `<button type="button" class="pd-arrow" data-act="pday" data-k="${k || ''}" aria-label="${lbl}" ${k ? '' : 'disabled'}>${ch}</button>`;
   return `<section class="card stack pd-sel" aria-label="Dia selecionado" aria-live="polite">
     <div class="pd-selhead">${arrow(newer, 'Dia fora da meta mais recente', '‹')}<div class="pd-seltitle"><span class="meal-name">${WD_SHORT[pick.i % 7]}, ${ddmm(pick.k)}</span><span class="small muted" style="font-weight:600">${pos >= 0 ? `${pos + 1} de ${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : q.length ? `${q.length} ${q.length === 1 ? 'dia fora' : 'dias fora'} da meta` : 'Nenhum dia fora da meta'}</span></div>${arrow(older, 'Dia fora da meta mais antigo', '›')}</div>
-    <div class="between" style="align-items:baseline"><span><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>
-    ${r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
-    ${lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
+    ${r.st === 'semreg' ? `<div class="between" style="align-items:center"><span class="muted">Nada marcado neste dia</span><span class="pd-pill pd-semreg">Sem registro</span></div>` : `<div class="between" style="align-items:baseline"><span><span class="num" style="font-size:28px">${nf(r.kcal)}</span> <span class="muted">kcal${r.meta ? ` · <strong class="pd-t-${r.st}">${sgnK(r.diff)}</strong> da meta` : ''}</span></span><span class="pd-pill pd-${r.st}">${PD_TXT[r.st]}</span></div>`}
+    ${r.st === 'semreg' ? '<div class="small muted">Conta como dia fora do plano e fica fora das médias. Se lembrar o que comeu, abra o dia e marque.</div>' : r.st !== 'ok' ? `<div style="font-weight:600">${esc(causeTxt(r.cause))}</div>` : ''}
+    ${r.st === 'semreg' ? '' : lines.length ? `<ul class="pd-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<div class="small muted">${r.st === 'ok' ? 'Seguiu o plano.' : 'Sem anotações neste dia.'}</div>`}
     ${pick.k >= addDays(todayKey(), -MAX_BACK) ? `<button type="button" class="btn small" style="align-self:flex-start" data-act="openday" data-k="${pick.k}">Abrir o dia</button>` : ''}
   </section>`;
 }
@@ -947,14 +948,14 @@ function pdMap(cells) {
     <ul class="legend pd-legend"><li><span class="lg pd-over"></span>Comeu a mais</li><li><span class="lg pd-under"></span>Não fez ou fez menos</li><li><span class="lg pd-livre"></span>Refeição livre</li></ul>
     ${detail}</section>`;
 }
-const DEAL_SUG = { doce: 'Sem doce em casa', bebida: 'Bebida alcoólica em 1 dia só', salgado: 'Jantar pronto antes de sair', porcao: 'Servir o prato uma vez só', outro: 'Anotar antes de comer fora do plano', troca: 'Seguir a opção do plano, sem trocar', menos: 'Comer a porção inteira do plano', semkcal: 'Anotar as calorias das trocas' };
+const DEAL_SUG = { semreg: 'Marcar cada refeição logo depois de comer', doce: 'Sem doce em casa', bebida: 'Bebida alcoólica em 1 dia só', salgado: 'Jantar pronto antes de sair', porcao: 'Servir o prato uma vez só', outro: 'Anotar antes de comer fora do plano', troca: 'Seguir a opção do plano, sem trocar', menos: 'Comer a porção inteira do plano', semkcal: 'Anotar as calorias das trocas' };
 function pdWeekCard() {
   const ws = addDays(weekStart(), -7);
   const first = firstLogDay();
   if (!first || addDays(ws, 6) < first) return '';
   const rev = (w) => { const out = []; for (let i = 0; i < 7; i++) { const k = addDays(w, i); if (k >= first && k < todayKey()) out.push(Core.dayReview(S, k)); } return out; };
   const last = rev(ws), before = rev(addDays(ws, -7));
-  const off = (rs) => rs.filter((r) => r.st === 'over' || r.st === 'under');
+  const off = (rs) => rs.filter((r) => OFF.includes(r.st));
   const cnt = {};
   off(last).forEach((r) => { cnt[r.cause] = (cnt[r.cause] || 0) + 1; });
   const causes = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
@@ -985,20 +986,22 @@ function viewAlimentacao() {
   const all = cells.filter((c) => c.r).map((c) => c.r);
   const rs = all.filter((r) => r.st !== 'pausa');
   const nPausa = all.length - rs.length;
+  const comReg = rs.filter((r) => r.st !== 'semreg');
+  const nSem = rs.length - comReg.length;
   const ws = addDays(weekStart(), UI.wk * 7);
   const week = `<section class="card stack" aria-label="Resumo da semana"><div class="between" style="align-items:center"><h2 class="label">Semana de ${ddmm(ws)}</h2>
       <div class="pill small-pill" role="group" aria-label="Qual semana"><button type="button" data-act="wk" data-v="-1" aria-pressed="${UI.wk === -1}">Passada</button><button type="button" data-act="wk" data-v="0" aria-pressed="${UI.wk === 0}">Esta</button></div></div>
       ${weekSummary(ws)}${weekGrid(ws).html}</section>`;
   if (!rs.length) return `<div class="col">${week}<section class="card small muted">Os dias fora da meta aparecem aqui a partir de amanhã. Hoje não entra porque ainda não terminou.</section>${pausesCard()}</div>`;
   const c = (st) => rs.filter((r) => r.st === st).length;
-  const avg = rs.reduce((a, r) => a + r.kcal, 0) / rs.length;
+  const avg = comReg.length ? comReg.reduce((a, r) => a + r.kcal, 0) / comReg.length : 0;
   const meta = num(S.goals.kcal);
   const miss = rs.reduce((a, r) => a + r.missed.length, 0);
   const lo = Math.round(meta * 0.9), hi = Math.round(meta * 1.1);
   const cal = [];
   for (let w = 0; w < weeks; w++) {
     const row = cells.slice(w * 7, w * 7 + 7);
-    const wr = row.filter((x) => x.r && x.r.st !== 'pausa').map((x) => x.r);
+    const wr = row.filter((x) => x.r && x.r.st !== 'pausa' && x.r.st !== 'semreg').map((x) => x.r);
     const a = wr.length ? wr.reduce((s2, r) => s2 + r.kcal, 0) / wr.length : null;
     const acls = a === null ? '' : a > hi ? 'pd-t-over' : a < lo ? 'pd-t-under' : '';
     cal.push(`<div class="pd-calrow">${row.map((x) => x.r
@@ -1013,9 +1016,10 @@ function viewAlimentacao() {
       <div class="pd-tile pd-under"><span class="num">▼ ${c('under')}</span><span>abaixo</span></div>
       <div class="pd-tile"><span class="num">${miss}</span><span>refeições não feitas</span></div>
     </div>
-    <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}${nPausa ? ` · ${nPausa} ${nPausa === 1 ? 'dia' : 'dias'} em pausa fora da conta` : ''}</span><span><strong class="num">${nf(avg)} kcal</strong>${meta ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
+    ${nSem ? `<div class="pd-semline"><span class="pd-g-sem">?</span><span><strong>${nSem} ${nSem === 1 ? 'dia sem registro' : 'dias sem registro'}</strong> <span class="muted">· nada marcado, conta como fora do plano e fica fora da média</span></span></div>` : ''}
+    <div class="between small" style="border-top:1px solid var(--line);padding-top:10px"><span class="muted">Média por dia${meta ? ` · meta ${nf(meta)}` : ''}${nPausa ? ` · ${nPausa} ${nPausa === 1 ? 'dia' : 'dias'} em pausa fora da conta` : ''}</span><span><strong class="num">${comReg.length ? nf(avg) + ' kcal' : '—'}</strong>${meta && comReg.length ? ` <span class="muted">(${sgnK(Math.round(avg - meta))})</span>` : ''}</span></div>
     <div class="pd-cal"><div class="pd-calrow pd-calhead">${WD_SHORT.map((w) => `<span>${w.slice(0, 1)}</span>`).join('')}<span class="pd-avg">média</span></div>${cal.join('')}</div>
-    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li>${nPausa ? '<li><span class="lg pd-pausa"></span>Pausa</li>' : ''}</ul>
+    <ul class="legend pd-legend"><li><span class="lg pd-ok"></span>Na meta</li><li><span class="lg pd-over"></span>Acima</li><li><span class="lg pd-livre"></span>Refeição livre</li><li><span class="lg pd-under"></span>Abaixo</li>${nSem ? '<li><span class="lg pd-semreg"></span>Sem registro</li>' : ''}${nPausa ? '<li><span class="lg pd-pausa"></span>Pausa</li>' : ''}</ul>
   </section>`;
   const dayCard = pdDayCard(cells);
   return `<div class="split"><div class="col">${summary}<div class="only-mobile col">${dayCard}</div>${pdMap(cells)}</div><div class="col"><div class="only-desktop col">${dayCard}</div>${pdWeekCard()}${pausesCard()}${week}</div></div>`;
@@ -1676,10 +1680,11 @@ async function exportHistory() {
       { 'Leia-me': 'kcal do plano: soma das refeições marcadas como feitas, pela opção do plano escolhida no dia.' },
       { 'Leia-me': 'kcal anotadas: estimativas para trocas, comida a mais, refeição livre e beliscos, digitadas ou vindas do banco de alimentos do app (valores aproximados da TACO). Anotação sem kcal fica registrada, mas não soma.' },
       { 'Leia-me': 'Proteína, carbo e gordura: do plano e das anotações que têm esses valores (as do banco de alimentos têm os três; as digitadas, só a proteína, se informada).' },
-      { 'Leia-me': 'Refeição sem marcação (Feita = não) conta como não feita.' },
+      { 'Leia-me': 'Refeição sem marcação (Feita = não) conta como não feita, quando o dia tem pelo menos uma refeição marcada.' },
       { 'Leia-me': 'Situação: na meta (kcal total dentro de ±10% da meta), acima, abaixo ou refeição livre (prevista no plano, 1 por semana). Hoje fica em branco porque o dia não terminou.' },
       { 'Leia-me': 'Causa principal: o que mais pesou no dia fora da meta. Acima: categoria da anotação de "comi a mais" (doce, bebida, salgado ou fast food, porção maior), troca mais calórica ou bebida alcoólica. Abaixo: refeição não feita ou porção menor.' },
       { 'Leia-me': 'Combinados: o que o usuário combinou consigo mesmo para cada semana, na revisão semanal do app.' },
+      { 'Leia-me': 'Sem registro: dia passado sem nenhuma refeição marcada, anotação ou bebida. Não se sabe o que foi comido: conte como dia fora do plano, mas deixe fora das médias de calorias e macros.' },
       { 'Leia-me': 'Pausa: período marcado pelo usuário (férias, viagem, festa) em que ele não seguiu o plano de propósito. Esses dias não são falhas: deixe-os fora das médias e da busca por padrões.' },
       { 'Leia-me': 'Água: soma dos registros do dia em ml. Dia sem registro de água aparece como 0, o que pode ser só falta de registro.' },
       { 'Leia-me': 'kcal de bebida alcoólica: estimativa por tipo (cerveja 0,43 kcal/ml, vinho 0,85, destilado 2,3, drink 0,8).' },

@@ -476,3 +476,9 @@ p, .small, .muted, .meal-items, .hint, .pd-lines li { text-wrap: pretty; }
 .pause-bar { display: flex; align-items: center; gap: 12px; background: var(--field); border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; }
 .pause-bar > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pause-bar .small { color: var(--muted); }
+
+/* Sem registro: nada marcado no dia */
+.pd-semreg { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1.5px var(--muted); }
+.pd-legend .lg.pd-semreg { box-shadow: inset 0 0 0 1.5px var(--muted); }
+.pd-semline { display: flex; align-items: center; gap: 10px; font-size: 14px; border-radius: 14px; padding: 10px 12px; box-shadow: inset 0 0 0 1.5px var(--line); }
+.pd-g-sem { width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--muted); box-shadow: inset 0 0 0 1.5px var(--muted); }

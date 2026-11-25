@@ -280,7 +280,7 @@
      mais pesou: categorias das anotações de "comi a mais", trocas, bebida alcoólica ou refeições não feitas. */
   const CAUSES = {
     doce: 'Doce', bebida: 'Bebida', salgado: 'Salgado ou fast food', porcao: 'Porção maior', outro: 'Comeu além do plano',
-    troca: 'Trocou por algo mais calórico', pulou: 'Refeição não feita', menos: 'Comeu menos que o plano', livre: 'Refeição livre', plano: 'Plano acima da meta', semkcal: 'Troca sem calorias anotadas', livreextra: 'Refeição livre além do limite da semana'
+    troca: 'Trocou por algo mais calórico', pulou: 'Refeição não feita', menos: 'Comeu menos que o plano', livre: 'Refeição livre', plano: 'Plano acima da meta', semkcal: 'Troca sem calorias anotadas', livreextra: 'Refeição livre além do limite da semana', semreg: 'Sem registro'
   };
   /* Refeições livres por semana (Metas). Vazio = 1, o padrão do plano */
   const livresPorSemana = (s) => { const v = (s.goals || {}).livres; return v === '' || v === undefined || v === null ? 1 : Math.max(0, Math.round(num(v))); };
@@ -297,6 +297,11 @@
     const diff = meta ? kcal - meta : 0;
     const pz = pauseOf(s, k);
     if (pz) return { k, kcal, meta, diff, st: 'pausa', cause: null, pause: pz, missed: [], cells: [], over: {}, under: {} };
+    /* Nada marcado, nenhuma anotação e nenhuma bebida: não dá para saber o que foi comido.
+       Conta como dia fora do plano, mas fica fora das médias de calorias (a água sozinha não conta como registro) */
+    const d = (s.days || {})[k] || {};
+    const marcou = Object.values(d.done || {}).some(Boolean) || Object.values(d.notes || {}).some((a) => a && a.length) || dayDrinks(s, k).length;
+    if (!marcou) return { k, kcal, meta, diff, st: 'semreg', cause: 'semreg', missed: [], cells: [], over: {}, under: {} };
     const cells = [];
     const over = {}, under = {};
     const put = (o, c, v) => { o[c] = (o[c] || 0) + v; };

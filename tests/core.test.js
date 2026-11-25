@@ -235,7 +235,7 @@ test('pausa: dias da pausa ficam fora da análise e da semana', () => {
   const r = C.dayReview(s, '2026-11-21');
   assert.equal(r.st, 'pausa');
   assert.equal(r.pause.name, 'Praia com a família');
-  assert.equal(C.dayReview(s, '2026-11-24').st, 'under');
+  assert.equal(C.dayReview(s, '2026-11-24').st, 'semreg');
   const w = C.weekStats(s, '2026-11-16', '2026-11-22');
   assert.equal(w.paused, 3);
   assert.equal(w.days, 4);
@@ -247,4 +247,14 @@ test('merge: pausas por id, a mais nova vence e a apagada não volta', () => {
   const c = { id: 'p2', from: '2026-12-24', to: '2026-12-26', name: 'Natal', u: 2 };
   const out = C.mergeStates(base({ pauses: [a] }), base({ pauses: [b, c], tomb: { 'p:p2': 9 } }));
   assert.deepEqual(out.pauses.map((x) => x.id + x.to), ['p12026-11-23']);
+});
+
+test('sem registro: dia sem nada marcado não vira "abaixo"; com uma refeição marcada, o resto conta como não feito', () => {
+  const vazio = base({ days: { [D]: { water: 1500 } } });
+  const r = C.dayReview(vazio, D);
+  assert.equal(r.st, 'semreg');
+  assert.equal(r.cause, 'semreg');
+  assert.deepEqual(r.missed, []);
+  const meio = base({ days: { [D]: { done: { cafe: true } } } });
+  assert.equal(C.dayReview(meio, D).st, 'under');
 });
