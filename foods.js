@@ -160,11 +160,17 @@
     ['Refrigerante', 42, 0, 10.6, 0, '1 lata', 350],
     ['Refrigerante zero', 0, 0, 0, 0, '1 lata', 350],
     ['Suco de laranja natural', 45, 0.7, 10.4, 0.2, '1 copo', 250],
+    // Vitaminas batidas com 250 ml de leite desnatado, sem açúcar (por 100 ml; a porção é o copo inteiro)
+    ['Vitamina de abacate', 52, 2.8, 5.2, 2.5, '1 copo (250 ml de leite + 100 g de abacate)', 350],
+    ['Vitamina de morango', 34, 2.7, 5.4, 0.2, '1 copo (250 ml de leite + 100 g de morango)', 350],
+    ['Vitamina de banana', 50, 2.9, 10.0, 0.1, '1 copo (250 ml de leite + 1 banana)', 330],
+    ['Vitamina de banana com aveia', 81, 3.9, 15.1, 0.8, '1 copo (250 ml de leite + 1 banana + 2 col. sopa de aveia)', 350],
+    ['Vitamina de mamão', 37, 2.3, 7.1, 0.1, '1 copo (250 ml de leite + 1/2 mamão papaia)', 400],
     ['Água de coco', 22, 0, 5.3, 0, '1 copo', 250],
     ['Café sem açúcar', 2, 0.1, 0.3, 0, '1 xícara', 50]
   ];
   /* Medidos em ml: bebidas, leites líquidos e o açaí de copo */
-  const LIQUIDOS = /^(Refrigerante|Suco|Água|Café|Leite (integral|desnatado)$|Açaí tradicional)/;
+  const LIQUIDOS = /^(Refrigerante|Suco|Água|Café|Vitamina|Leite (integral|desnatado)$|Açaí tradicional)/;
   FOODS.isLiquid = (name) => LIQUIDOS.test(name);
   if (typeof module !== 'undefined' && module.exports) module.exports = FOODS; else root.FOODS = FOODS;
 })(typeof self !== 'undefined' ? self : this);
