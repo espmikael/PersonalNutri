@@ -354,7 +354,7 @@ function render() {
   if (AUTH_ROUTES.includes(r.name)) { $app.innerHTML = authView(r.name); return; }
   const offlineSession = !navigator.onLine && hasStoredSession();
   if (sb && !UI.auth.user && !offlineSession && !skipAuth()) { $app.innerHTML = authView('entrar'); return; }
-  /* Endereços antigos: Compras virou parte de Plano e Extras foi para "Fora das refeições", em Hoje */
+  /* Endereços antigos: Compras virou parte de Plano e Extras foi para "Fora do cardápio", em Hoje */
   if (r.name === 'compras') { UI.planTab = 'compras'; location.replace('#plano'); return; }
   if (r.name === 'extras') { location.replace('#hoje'); return; }
   const views = { hoje: viewHoje, refeicao: viewRefeicao, macros: viewMacros, progresso: viewProgresso, plano: viewPlano, conta: viewConta };
@@ -567,7 +567,7 @@ function drinkForm() {
 function foraCard(k) {
   const open = UI.note && UI.note.meal === FORA;
   return `<article class="card meal" style="align-items:flex-start"><div class="meal-main">
-    <div class="meal-head"><span class="meal-name">Fora das refeições</span></div>
+    <div class="meal-head"><span class="meal-name">Fora do cardápio</span></div>
     <div class="meal-items">Beliscos, bebida alcoólica e refeição livre.</div>
     ${notesList(k, FORA)}
     ${foraDrinks(k)}
@@ -606,7 +606,7 @@ function rulesCard(ws) {
   const f = freeStatus(ws);
   return `<section class="card stack rules" aria-label="Regras do plano">
     <div class="between"><h2 class="label">Regras do plano</h2><a class="small" style="font-weight:600;text-decoration:none" href="#plano">Editar</a></div>
-    <div class="rule-free"><span><strong>${esc(freeRuleTxt())}</strong><span class="small muted" style="display:block">Registre no “+ Anotar” da refeição ou em Fora das refeições.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></div>
+    <div class="rule-free"><span><strong>${esc(freeRuleTxt())}</strong><span class="small muted" style="display:block">Registre no “+ Anotar” da refeição ou em Fora do cardápio.</span></span><span class="free-pill ${f.on ? 'on' : ''}">${esc(f.text)}</span></div>
     ${S.rules.length ? `<ul class="rule-list">${S.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
   </section>`;
 }
@@ -800,7 +800,7 @@ const causeTxt = (c) => (Core.CAUSES[c] || 'Fora da meta');
 function dayLines(k, r) {
   const out = [];
   mealsOfDay(k).forEach((m) => notesOf(k, m.id).forEach((n) => out.push(m.name + ' · ' + (NOTE_SHORT[n.type] || 'Anotação') + catTxt(n) + ': ' + (n.text || 'sem descrição') + (num(n.kcal) ? ' (≈ ' + nf(n.kcal) + ' kcal)' : ''))));
-  notesOf(k, FORA).forEach((n) => out.push('Fora das refeições · ' + (NOTE_SHORT[n.type] || 'Anotação') + catTxt(n) + ': ' + (n.text || 'sem descrição') + (num(n.kcal) ? ' (≈ ' + nf(n.kcal) + ' kcal)' : '')));
+  notesOf(k, FORA).forEach((n) => out.push('Fora do cardápio · ' + (NOTE_SHORT[n.type] || 'Anotação') + catTxt(n) + ': ' + (n.text || 'sem descrição') + (num(n.kcal) ? ' (≈ ' + nf(n.kcal) + ' kcal)' : '')));
   S.drinks.filter((d) => d.date === k).forEach((d) => out.push('Bebida alcoólica · ' + ((DRINKS[d.type] || {}).label || d.type) + ' ' + nf(d.cups * d.ml) + ' ml (≈ ' + nf(d.kcal) + ' kcal)'));
   if (r && r.missed.length) out.push('Não feito: ' + r.missed.join(', '));
   return out;
@@ -836,7 +836,7 @@ function pdDayCard(cells) {
   </section>`;
 }
 function pdMap(cells) {
-  const rows = sortedPlan().map((m) => ({ id: m.id, name: m.name })).concat([{ id: FORA, name: 'Fora das refeições' }]);
+  const rows = sortedPlan().map((m) => ({ id: m.id, name: m.name })).concat([{ id: FORA, name: 'Fora do cardápio' }]);
   const hit = {};
   cells.forEach((c) => {
     if (!c.r) return;
@@ -1585,7 +1585,7 @@ async function exportHistory() {
         });
         ns.forEach((n) => { textos.push(m.name + ' – ' + (NOTE_SHORT[n.type] || '') + ': ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': m.name, 'Tipo': NOTE_TYPES[n.type] || n.type, 'Categoria': NOTE_CATS[n.cat] || '', 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
       });
-      notesOf(k, FORA).forEach((n) => { kAnot += num(n.kcal); p += num(n.p); c += num(n.c); gg += num(n.g); textos.push('Fora das refeições: ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': 'Fora das refeições', 'Tipo': NOTE_TYPES[n.type] || n.type, 'Categoria': NOTE_CATS[n.cat] || '', 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
+      notesOf(k, FORA).forEach((n) => { kAnot += num(n.kcal); p += num(n.p); c += num(n.c); gg += num(n.g); textos.push('Fora do cardápio: ' + (n.text || '')); anotacoes.push({ 'Data': k, 'Refeição': 'Fora do cardápio', 'Tipo': NOTE_TYPES[n.type] || n.type, 'Categoria': NOTE_CATS[n.cat] || '', 'O que comeu': n.text || '', 'kcal estimadas': num(n.kcal) || '', 'Proteína (g)': num(n.p) || '', 'Carbo (g)': num(n.c) || '', 'Gordura (g)': num(n.g) || '' }); });
       const bebidas = S.drinks.filter((x) => x.date === k);
       const kBeb = bebidas.reduce((a, x) => a + num(x.kcal), 0);
       const ck = S.checkins.find((x) => x.date === k);

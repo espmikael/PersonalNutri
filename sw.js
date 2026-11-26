@@ -3,7 +3,7 @@
 // Fontes e bibliotecas de CDN: usa a cópia salva e atualiza em segundo plano.
 // Chamadas ao Supabase nunca passam pelo cache.
 // Versão nova fica esperando até o app pedir para ativar (botão "Atualizar"); na primeira instalação ativa direto.
-const VERSION = 'pn-v33';
+const VERSION = 'pn-v34';
 const APP_CACHE = VERSION + '-app';
 const CDN_CACHE = VERSION + '-cdn';
 const APP_FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './foods.js', './config.js', './manifest.webmanifest', './favicon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png', './vendor/supabase.js', './vendor/591.supabase.js'];

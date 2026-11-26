@@ -2,7 +2,7 @@
 const { test, expect, go } = require('./fixtures');
 
 const TELAS = [
-  ['hoje', '', 'Fora das refeições'],
+  ['hoje', '', 'Fora do cardápio'],
   ['progresso', "UI.prog='comida';render()", 'Calorias'],
   ['progresso', "UI.prog='corpo';render()", 'Check-in semanal'],
   ['plano', "UI.planTab='refeicoes';render()", 'Metas e regras'],
