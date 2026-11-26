@@ -161,7 +161,7 @@
     ['Refrigerante zero', 0, 0, 0, 0, '1 lata', 350],
     ['Suco de laranja natural', 45, 0.7, 10.4, 0.2, '1 copo', 250],
     // Vitaminas batidas com 250 ml de leite desnatado, sem açúcar (por 100 ml; a porção é o copo inteiro)
-    ['Vitamina de abacate', 52, 2.8, 5.2, 2.5, '1 copo (250 ml de leite + 100 g de abacate)', 350],
+    ['Vitamina de abacate', 68, 2.4, 5.7, 4.4, '1 copo (250 ml de leite + 1 abacate pequeno, ~250 g de polpa)', 480],
     ['Vitamina de morango', 34, 2.7, 5.4, 0.2, '1 copo (250 ml de leite + 100 g de morango)', 350],
     ['Vitamina de banana', 50, 2.9, 10.0, 0.1, '1 copo (250 ml de leite + 1 banana)', 330],
     ['Vitamina de banana com aveia', 81, 3.9, 15.1, 0.8, '1 copo (250 ml de leite + 1 banana + 2 col. sopa de aveia)', 350],
