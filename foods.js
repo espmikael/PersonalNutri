@@ -146,6 +146,20 @@
     ['Barra de proteína', 420, 33, 40, 15, '1 unidade', 45],
     ['Achocolatado em pó', 401, 4.2, 91.2, 2.2, '1 col. sopa', 15],
 
+    // Chocolates e snacks de pacote (valores de rótulo; a porção é a embalagem ou a unidade)
+    ['Snickers', 483, 8.8, 60, 23, '1 barra', 45],
+    ['Snickers pequeno', 465, 8.8, 60.5, 23.3, '1 barra', 21.5],
+    ['Snickers mini', 472, 8.3, 61.1, 22.2, '1 unidade', 9],
+    ['Moranguete', 427, 0.9, 81, 11, '1 unidade', 9],
+    ['KitKat', 530, 8, 57.8, 28.9, '1 barra', 41.5],
+    ['Prestígio', 467, 3, 63.6, 21.5, '1 unidade', 33],
+    ['Bis', 513, 6, 63.3, 25.7, '1 unidade', 6],
+    ['Sonho de Valsa', 520, 5, 65, 26, '1 unidade', 20],
+    ['Ouro Branco', 535, 5, 60, 29.5, '1 unidade', 20],
+    ['Batom (Baton)', 531, 8, 53.1, 31.2, '1 unidade', 16],
+    ['Wafer recheado de morango', 520, 5.7, 60, 28, '4 unidades', 30],
+    ['Ruffles original', 533, 5.1, 47, 35, '1 pacote pequeno', 40],
+
     // Lanches e comida de rua
     ['Pizza de mussarela', 266, 11.4, 33, 9.7, '1 fatia', 110],
     ['Pizza de calabresa', 290, 12, 30, 13, '1 fatia', 110],
