@@ -402,7 +402,7 @@ function ring(pct, size = 124, stroke = 11) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, h = size / 2;
   const over = pct > 1.05;
   const off = c * (1 - Math.min(1, Math.max(0, pct)));
-  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${h}" cy="${h}" r="${r}" fill="none" stroke="var(--row)" stroke-width="${stroke}"/><circle class="ring-val" cx="${h}" cy="${h}" r="${r}" fill="none" stroke="${over ? 'var(--o)' : 'var(--pri)'}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${h} ${h})"/></svg>`;
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${h}" cy="${h}" r="${r}" fill="none" stroke="var(--row)" stroke-width="${stroke}"/><circle class="ring-val" cx="${h}" cy="${h}" r="${r}" fill="none" stroke="${over ? 'var(--s-over)' : 'var(--pri)'}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${h} ${h})"/></svg>`;
 }
 /* Sequências de dias cumprindo a proteína, a água e o plano inteiro */
 /* Cartão principal do dia: anel das calorias e os três macros */
