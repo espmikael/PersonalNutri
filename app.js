@@ -378,19 +378,25 @@ function macroBars(c, g) {
   }).join('');
 }
 function weekGrid(ws = weekStart()) {
+  // Mesmos estados e símbolos do calendário de Progresso › Alimentação; hoje fica neutro até o dia acabar
   const t = todayKey();
-  const total = S.plan.length || 1;
+  const first = firstLogDay();
   const labels = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
-  let done = 0, possible = 0;
   const cells = labels.map((l, i) => {
     const k = addDays(ws, i);
-    const n = doneCount(k);
-    if (Core.pauseOf(S, k)) return `<div class="${k === t ? 'today' : ''}"><span>${l}</span><span class="wbox pausa" aria-label="${DIAS[parseKey(k).getDay()]}: pausa">–</span></div>`;
-    if (k <= t) { done += n; possible += total; }
-    const cls = k > t ? '' : n >= total ? 'full' : n > 0 ? 'part' : '';
-    return `<div class="${k === t ? 'today' : ''}"><span>${l}</span><span class="wbox ${cls}" aria-label="${DIAS[parseKey(k).getDay()]}: ${n} de ${total}">${k > t ? '' : n}</span></div>`;
+    const dia = DIAS[parseKey(k).getDay()];
+    let cls = '', txt = '', aria = dia;
+    if (Core.pauseOf(S, k)) { cls = 'pd-pausa'; txt = PD_GLYPH.pausa; aria += ': pausa'; }
+    else if (k === t) { cls = 'wtoday'; aria += ': hoje'; }
+    else if (k < t && first && k >= first) {
+      const r = Core.dayReview(S, k);
+      cls = 'pd-' + r.st;
+      txt = r.st === 'ok' ? I.check : PD_GLYPH[r.st];
+      aria += ': ' + PD_TXT[r.st].toLowerCase();
+    }
+    return `<div class="${k === t ? 'today' : ''}"><span>${l}</span><span class="wbox ${cls}" role="img" aria-label="${aria}">${txt}</span></div>`;
   }).join('');
-  return { html: `<div class="week">${cells}</div>`, done, possible };
+  return { html: `<div class="week">${cells}</div>` };
 }
 function ring(pct, size = 124, stroke = 11) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, h = size / 2;
