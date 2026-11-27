@@ -279,7 +279,7 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 .hero-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .hero-rest { font-size: 14px; color: var(--muted); }
 .hero-rest strong { color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 17px; font-variant-numeric: tabular-nums; }
-.hero-rest.over strong { color: var(--o-text); }
+.hero-rest.over strong { color: var(--s-over-text); }
 .mini-macro { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
 .mini-macro .num { font-size: 14px; color: var(--ink); }
 .bar.thin { height: 6px; }
