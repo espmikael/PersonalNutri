@@ -777,7 +777,7 @@ function photosCard() {
 /* ---------- Progresso › Alimentação: dias fora da meta e padrões ----------
    Só julga dias passados, a partir do primeiro dia com registro. Refeição não marcada conta como não feita. */
 const PD_TXT = { ok: 'Na meta', over: 'Acima', livre: 'Refeição livre', under: 'Abaixo', pausa: 'Pausa', semreg: 'Sem registro' };
-const PD_GLYPH = { ok: '', over: '▲', livre: 'L', under: '▼', pausa: '–', semreg: '?' };
+const PD_GLYPH = { ok: '✓', over: '▲', livre: 'L', under: '▼', pausa: '–', semreg: '?' };
 const WD_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const sgnK = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n));
 function setDeal(t) {

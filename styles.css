@@ -6,6 +6,11 @@
   --mk: #1F3361; --mp: #3D6BD6; --mc: #D9962B; --mg: #2F8F6A;
   --danger: #B42318;
   --u: #3D6BD6; --u-ink: #FFFFFF; --u-text: #24479A; --u-soft: #E6EDFB;
+  /* Situação do dia: verde na meta, vermelho acima, amarelo abaixo, lilás refeição livre */
+  --s-ok: #1E8E50; --s-ok-ink: #FFFFFF; --s-ok-text: #17803F; --s-ok-soft: #E2F5EA;
+  --s-over: #D1343A; --s-over-ink: #FFFFFF; --s-over-text: #B4232A; --s-over-soft: #FCE4E4;
+  --s-under: #F2C230; --s-under-ink: #1B1E24; --s-under-text: #8A6500; --s-under-soft: #FDF3D2;
+  --s-livre: #7C5CE0; --s-livre-text: #5B3FC4; --s-livre-soft: #EEE8FF;
   --radius: 20px;
   color-scheme: light;
 }
@@ -17,6 +22,10 @@
   --mk: #C9D6F3; --mp: #7FA2F0; --mc: #E8B35A; --mg: #5CC39A;
   --danger: #F2877C;
   --u: #7FA2F0; --u-ink: #0F1A2E; --u-text: #A9C1F5; --u-soft: #26324A;
+  --s-ok: #25A55F; --s-ok-ink: #FFFFFF; --s-ok-text: #5FD08F; --s-ok-soft: #1D3A2A;
+  --s-over: #E5484D; --s-over-ink: #FFFFFF; --s-over-text: #FF8A8E; --s-over-soft: #4A2326;
+  --s-under: #F2C230; --s-under-ink: #1B1E24; --s-under-text: #F5C542; --s-under-soft: #45391A;
+  --s-livre: #A78BFA; --s-livre-text: #CDBDFF; --s-livre-soft: #3B3354;
   color-scheme: dark;
 }
 
@@ -144,7 +153,6 @@ textarea.input { padding: 10px 12px; min-height: 64px; resize: vertical; }
 .week .today { color: var(--pri-text); font-weight: 700; }
 .wbox { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; border: 1.5px solid var(--line); }
 .wbox[class*="pd-"] { border-color: transparent; }
-.wbox.pd-ok { background: transparent; color: var(--mg); border-color: var(--mg); }
 .wbox.pd-ok svg { width: 18px; height: 18px; }
 .wbox.wtoday { border-color: var(--pri); }
 
@@ -374,22 +382,24 @@ details.how > div { padding: 0 0 12px 24px; line-height: 1.5; }
 /* ---------- Progresso › Alimentação ---------- */
 .prog-tabs { align-self: flex-start; margin-bottom: 14px; width: max-content; }
 .prog-tabs button { min-width: 112px; }
-.pd-ok { background: var(--soft); color: var(--pri-text); }
-.pd-over { background: var(--o); color: var(--o-ink); }
-.pd-livre { background: var(--o-soft); color: var(--o-text); box-shadow: inset 0 0 0 1.5px var(--o); }
-.pd-under { background: var(--u); color: var(--u-ink); }
-.pd-mix { background: var(--o); color: var(--o-ink); box-shadow: inset 0 0 0 3px var(--u); }
+.pd-ok { background: var(--s-ok); color: var(--s-ok-ink); }
+.pd-over { background: var(--s-over); color: var(--s-over-ink); }
+.pd-livre { background: var(--s-livre-soft); color: var(--s-livre-text); box-shadow: inset 0 0 0 1.5px var(--s-livre); }
+.pd-under { background: var(--s-under); color: var(--s-under-ink); }
+.pd-mix { background: var(--s-over); color: var(--s-over-ink); box-shadow: inset 0 0 0 3px var(--s-under); }
 .pd-none { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
-.pd-t-over, .pd-t-livre { color: var(--o-text); }
-.pd-t-under { color: var(--u-text); }
+.pd-t-over { color: var(--s-over-text); }
+.pd-t-livre { color: var(--s-livre-text); }
+.pd-t-under { color: var(--s-under-text); }
+.pd-t-ok { color: var(--s-ok-text); }
 .pd-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 @media (min-width: 900px) { .pd-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .pd-tile { border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; background: var(--field); color: var(--ink); box-shadow: none; }
 .pd-tile .num { font-size: 22px; }
 .pd-tile > span:last-child { font-size: 13px; font-weight: 600; }
-.pd-tile.pd-ok, .pd-tile.pd-ok > span { color: var(--pri-text); }
-.pd-tile.pd-over { background: var(--o-soft); color: var(--o-text); }
-.pd-tile.pd-under { background: var(--u-soft); color: var(--u-text); }
+.pd-tile.pd-ok { background: var(--s-ok-soft); color: var(--s-ok-text); }
+.pd-tile.pd-over { background: var(--s-over-soft); color: var(--s-over-text); }
+.pd-tile.pd-under { background: var(--s-under-soft); color: var(--s-under-text); }
 .pd-cal { display: flex; flex-direction: column; gap: 4px; }
 .pd-calrow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) 48px; gap: 4px; align-items: center; }
 .pd-calhead { font-size: 11px; font-weight: 600; color: var(--muted); text-align: center; }
