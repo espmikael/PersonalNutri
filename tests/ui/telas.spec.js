@@ -121,3 +121,16 @@ test('campo de horário tem a mesma altura do campo de nome no editor do plano',
   const h = await page.evaluate(() => [document.querySelector('input[data-in=meal][data-f=name]'), document.querySelector('input[type=time]')].map((e) => Math.round(e.getBoundingClientRect().height)));
   expect(Math.abs(h[0] - h[1])).toBeLessThanOrEqual(2);
 });
+
+test('semana em Hoje mostra a situação de cada dia, não a contagem de refeições', async ({ page }, info) => {
+  test.skip(info.project.name !== 'pc', 'o card fica na coluna do PC');
+  await go(page, '');
+  const boxes = page.locator('.week .wbox');
+  await expect(boxes).toHaveCount(7);
+  const txt = (await boxes.allInnerTexts()).join('');
+  expect(txt).not.toMatch(/\d/);
+  const today = await page.evaluate(() => (parseKey(todayKey()).getDay() + 6) % 7);
+  await expect(boxes.nth(today)).toHaveClass(/wtoday/);
+  for (let i = 0; i < today; i++) await expect(boxes.nth(i)).toHaveClass(/pd-(ok|over|under|livre|semreg|pausa)/);
+  await page.locator('.week').screenshot({ path: 'test-results/semana.png' });
+});
